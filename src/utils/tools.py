@@ -1,12 +1,16 @@
 import os
 from langchain.tools import tool
+from typing import Dict, Any, Optional, List
 import pdfplumber
 from docx import Document
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import ssl
 import smtplib
-from src.utils.pydantic_schemas import MeetingMetadata
+import uuid
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from src.utils.pydantic_schemas import MeetingMetadata, MeetingAnalysis
 
 # -----------------------------
 # File processors with inline normalization
@@ -207,14 +211,11 @@ def orbit_meet_tool(transcript_text: str) -> str:
 # -------------------------------------------------------------------------------------------------
 
 # Gmail SMTP settings
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 465   # SSL PORT
-SENDER_EMAIL = "orbitmeet1@gmail.com"
-SENDER_PASSWORD = "fmnbrmwwfjqqppxk"   # Gmail App Password
+
 
 
 @tool
-def send_email_tool(to_email: str, subject: str, body: str) -> str:
+def send_email_tool(to_email: List[str], subject: List[str], body: List[str]) -> str:
     """
     Send an email using fixed Gmail SMTP credentials.
 
@@ -226,24 +227,140 @@ def send_email_tool(to_email: str, subject: str, body: str) -> str:
     Returns:
         str: Status message.
     """
+    load_dotenv()
+    SENDER_EMAIL= os.getenv("SENDER_EMAIL")
+    SMTP_SERVER= os.getenv("SMTP_SERVER")
+    SMTP_PORT= os.getenv("SMTP_PORT")
+    SENDER_PASSWORD=os.getenv("SENDER_PASSWORD")
 
-    try:
-        # Create Email
-        msg = MIMEMultipart("alternative")
-        msg["From"] = SENDER_EMAIL
-        msg["To"] = to_email
-        msg["Subject"] = subject
 
-        msg.attach(MIMEText(body, "html"))
 
-        # SSL encrypted connection (Gmail requirement)
-        context = ssl.create_default_context()
+    # Create Email
+    msg = MIMEMultipart("alternative")
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = to_email
+    msg["Subject"] = subject
 
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=context) as server:
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
+    msg.attach(MIMEText(body, "html"))
 
-        return f"Email sent successfully to {to_email}"
+    # SSL encrypted connection (Gmail requirement)
+    context = ssl.create_default_context()
 
-    except Exception as e:
-        return f"Error sending email: {str(e)}"
+    with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=context) as server:
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
+
+    return f"Email sent successfully to {to_email}"
+
+
+
+
+# ----------------------------------------------------------------------------------------------
+# Save to MongoDB
+# ----------------------------------------------------------------------------------------------
+
+@tool
+def save_meeting_analysis_to_mongo(data: Dict[str, Any]) -> str:
+    """
+    Saves meeting metadata, summary, and user analysis to MongoDB Atlas.
+    Updates project documents if project_id exists.
+    Returns project name and meeting name instead of IDs.
+    """
+    mongo_uri = os.getenv("MONGO_URI")  # Mongo URI from .env
+    client = MongoClient(mongo_uri)
+    db = client["meeting_db"]
+    summary_collection = db["meeting_summary"]
+    user_analysis_collection = db["useranalysis"]
+
+    # Validate input
+    meeting_analysis = MeetingAnalysis(**data)
+    metadata = meeting_analysis.metadata
+    summary = meeting_analysis.summary
+    user_analysis = meeting_analysis.user_analysis
+
+    if not metadata.project_id:
+        return "Project ID is None. Meeting not saved."
+
+    # ----------------------
+    # Update or insert meeting_summary
+    # ----------------------
+    summary_doc = {
+        "meeting_id": metadata.meeting_id,
+        "meeting_name": metadata.meeting_name,
+        "meeting_time": metadata.meeting_time,
+        "duration": metadata.duration,
+        "participants": [p.dict() for p in metadata.participants],
+        "summary_points": summary.summary_points
+    }
+
+    summary_collection.update_one(
+        {"project_id": metadata.project_id},
+        {"$push": {"meetings": summary_doc}},
+        upsert=True
+    )
+
+    # ----------------------
+    # Update or insert useranalysis
+    # ----------------------
+    user_docs = []
+    for ua in user_analysis:
+        user_docs.append({
+            "meeting_id": metadata.meeting_id,
+            "participant_summary": ua.participant_summary.dict()
+        })
+
+    user_analysis_collection.update_one(
+        {"project_id": metadata.project_id},
+        {"$push": {"meetings": {"$each": user_docs}}},
+        upsert=True
+    )
+
+    return f"Meeting '{metadata.meeting_name}' saved under project '{metadata.project_name}' in both collections."
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Fetch overall project history
+# ----------------------------------------------------------------------------------------------------------------
+
+@tool
+def fetch_project_data_from_mongo(
+    project_id: Optional[str] = None,
+    project_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Fetches project meetings and user analysis data from MongoDB.
+    Either project_id (UUID string) or project_name must be provided.
+    Returns a combined dict with meeting summaries and user analysis.
+    """
+    if not project_id and not project_name:
+        return {"error": "Please provide either project_id or project_name."}
+
+    mongo_uri = os.getenv("MONGO_URI")
+
+    # Connect to MongoDB
+    client = MongoClient(mongo_uri)
+    db = client["meeting_db"]
+    meeting_collection = db["meeting_summary"]
+    user_collection = db["user_analysis"]
+
+    # Build query
+    query = {}
+    if project_id:
+        query["project_id"] = uuid.UUID(project_id)
+    if project_name:
+        query["metadata.project_name"] = project_name
+
+    # Fetch meeting summaries
+    project_doc = meeting_collection.find_one(query)
+    if not project_doc:
+        return {"error": "Project not found."}
+
+    # Fetch user analysis for the same project
+    user_docs = list(user_collection.find(query, {"_id": 0}))
+
+    # Return combined data
+    return {
+        "project_name": project_doc["metadata"]["project_name"],
+        "meetings": project_doc.get("meetings", []),
+        "user_analysis": user_docs
+    }

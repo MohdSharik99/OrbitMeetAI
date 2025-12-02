@@ -62,23 +62,23 @@ llm = ChatGroq(
 # User Analysis Agent
 # --------------------------------------------------------------------------------------------
 
-my_agent = UserAnalysisAgent(model=llm, tools= [])
-
-json_result = my_agent.participant_analysis(input_transcript=transcript)
-
-user_schema = my_agent.parse_output_to_schema(text=json_result)
-
-# print(json_result)
-
-
-p_list = []
-for r in user_schema:
-    p_list.append({
-        "participant_name": r.participant_summary.participant_name,
-        "roadblocks": r.participant_summary.roadblocks
-    })
-
-print(p_list)
+# my_agent = UserAnalysisAgent(model=llm, tools= [])
+#
+# json_result = my_agent.participant_analysis(input_transcript=transcript)
+#
+# user_schema = my_agent.parse_output_to_schema(text=json_result)
+#
+# # print(json_result)
+#
+#
+# p_list = []
+# for r in user_schema:
+#     p_list.append({
+#         "participant_name": r.participant_summary.participant_name,
+#         "roadblocks": r.participant_summary.roadblocks
+#     })
+#
+# print(p_list)
 
 
 
@@ -87,14 +87,14 @@ print(p_list)
 # Summary analysis
 # --------------------------------------------------------------------------------------------
 
-# # Usage
-# my_agent = SummaryAgent(model=llm, tools=[])
-#
-# # Get validated Pydantic object
-# summary = my_agent.generate_summary(input_transcript=transcript)
-#
-# # This will display as a Pydantic object
-# print(summary)
+# Usage
+my_agent = SummaryAgent(model=llm, tools=[])
+
+# Get validated Pydantic object
+summary = my_agent.generate_summary(input_transcript=transcript)
+
+# This will display as a Pydantic object
+print(summary)
 
 
 
