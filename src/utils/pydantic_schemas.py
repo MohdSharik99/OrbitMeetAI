@@ -48,5 +48,10 @@ class UsersAnalysis(BaseModel):
     participant_summary: UserSummary
 
 
+# Combined schema
+class MeetingAnalysis(BaseModel):
+    metadata: MeetingMetadata
+    summary: SummaryList
+    user_analysis: List[UsersAnalysis]
 
 
