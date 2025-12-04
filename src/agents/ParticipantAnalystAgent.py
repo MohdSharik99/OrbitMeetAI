@@ -32,7 +32,7 @@ Return ONLY valid JSON matching this exact schema:
 ]
 """
 
-class UserAnalysisAgent:
+class ParticipantSummaryAnalyst:
     def __init__(self, model, tools: List[BaseTool],
                  project_id: Optional[uuid.UUID] = None,
                  meeting_id: Optional[uuid.UUID] = None):

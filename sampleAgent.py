@@ -1,5 +1,5 @@
-from src.agents.TaskActionableAgent import UserAnalysisAgent
-from src.agents.SummarizerAgent import SummaryAgent
+from src.agents.ParticipantAnalystAgent import ParticipantSummaryAnalyst
+from src.agents.MeetingSummaryAgent import MeetingSummaryAnalyst
 from src.utils.tools import orbit_meet_tool, format_normalize_tool
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv

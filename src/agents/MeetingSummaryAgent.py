@@ -44,7 +44,7 @@ If the transcript includes more than 10 meaningful points, select the most impor
 """
 
 
-class SummaryAgent:
+class MeetingSummaryAnalyst:
     def __init__(self, model, tools: List[BaseTool],
                  project_id: Optional[uuid.UUID] = None,
                  meeting_id: Optional[uuid.UUID] = None):
