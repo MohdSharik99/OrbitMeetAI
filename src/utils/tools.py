@@ -104,6 +104,7 @@ SPECIAL PARSING INSTRUCTIONS:
 - duration: Extract from the next line of meeting_time like 51m 18s, 30m 15s 
 - participants: Extract names from speaker lines and infer roles from context
 
+
 Example: "Project Phoenix -Part 1-20251130_093000-Meeting Recording" should parse as:
 - project_name: "Project Phoenix"
 - meeting_name: "Project Phoenix - Part 1
@@ -339,14 +340,14 @@ def fetch_project_data_from_mongo(
 
     # Connect to MongoDB
     client = MongoClient(mongo_uri)
-    db = client["meeting_db"]
+    db = client["ORBIT_MEET_DB"]
     meeting_collection = db["meeting_summary"]
-    user_collection = db["user_analysis"]
+    user_collection = db["participants_analysis"]
 
     # Build query
     query = {}
     if project_id:
-        query["project_id"] = uuid.UUID(project_id)
+        query["ProjectID"] = uuid.UUID(project_id)
     if project_name:
         query["metadata.project_name"] = project_name
 

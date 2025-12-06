@@ -88,7 +88,7 @@ llm = ChatGroq(
 # --------------------------------------------------------------------------------------------
 
 # Usage
-my_agent = SummaryAgent(model=llm, tools=[])
+my_agent = MeetingSummaryAnalyst(model=llm, tools=[])
 
 # Get validated Pydantic object
 summary = my_agent.generate_summary(input_transcript=transcript)

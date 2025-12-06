@@ -14,4 +14,6 @@ dependencies = [
     "langchain>=1.1.0",
     "langchain-groq>=1.1.0",
     "pymongo>=4.15.4",
+    "rapidfuzz>=3.14.3",
+    "docx2txt>=0.9",
 ]
