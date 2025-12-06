@@ -44,14 +44,11 @@ If the transcript includes more than 10 meaningful points, select the most impor
 """
 
 
-class MeetingSummaryAnalyst:
-    def __init__(self, model, tools: List[BaseTool],
-                 project_id: Optional[uuid.UUID] = None,
-                 meeting_id: Optional[uuid.UUID] = None):
 
+
+class MeetingSummaryAnalyst:
+    def __init__(self, model, tools: List[BaseTool]):
         self.model = model
-        self.project_id = project_id
-        self.meeting_id = meeting_id
 
         self.agent = create_agent(
             model=model,
@@ -59,26 +56,25 @@ class MeetingSummaryAnalyst:
             system_prompt=SYSTEM_PROMPT
         )
 
-    def generate_summary(self, input_transcript: str) -> SummaryList:
+    async def agenerate_summary(self, input_transcript: str) -> List[str]:
+
         user_message = HumanMessage(content=input_transcript)
 
-        response = self.agent.invoke(
+        # IMPORTANT: async version of agent execution
+        response = await self.agent.ainvoke(
             {"messages": user_message},
-            context={"user_role": "expert"}
+            context={"user_role": "expert_meeting_analyst"}
         )
 
-        # Extract AI message text
-        output_text = [
+        # Extract model output (AIMessage)
+        output_text = next(
             m.content for m in response["messages"]
-            if m.__class__.__name__ == "AIMessage"][0]
+            if m.__class__.__name__ == "AIMessage"
+        )
 
-        # Parse JSON list from model output
+        # Parse JSON list of bullet points
         parser = JsonOutputParser()
         summary_points = parser.parse(output_text)
 
-        # Return schema object
-        return SummaryList(
-            project_id=self.project_id,
-            meeting_id=self.meeting_id,
-            summary_points=summary_points
-        )
+        return summary_points
+

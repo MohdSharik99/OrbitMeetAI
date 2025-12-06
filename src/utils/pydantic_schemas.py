@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import uuid
@@ -14,21 +13,14 @@ class Participant(BaseModel):
     role: str
     department: str
 
-# METADATA SCHEMA
-class MeetingMetadata(BaseModel):
-    project_id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    meeting_id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    project_name: Optional[str]
-    meeting_name: str
-    meeting_time: datetime
-    duration: str
-    participants: List[Participant]
-
 
 # SUMMARY POINTS SCHEMA
 class SummaryList(BaseModel):
-    project_id: Optional[uuid.UUID] = None
-    meeting_id: Optional[uuid.UUID] = None
+    project_key: str
+    project_id: str
+    project_name: str
+    meeting_name: str
+    participants: List[str]
     summary_points: List[str]
 
 
@@ -41,17 +33,10 @@ class UserSummary(BaseModel):
     actionable: List[str] = Field(..., max_length=5)
 
 
-# USER ANALYSIS AGENT
 class UsersAnalysis(BaseModel):
-    project_id: Optional[uuid.UUID] = None
-    meeting_id: Optional[uuid.UUID] = None
+    project_key: str
+    project_id: str
+    meeting_name: str
     participant_summary: UserSummary
-
-
-# Combined schema
-class MeetingAnalysis(BaseModel):
-    metadata: MeetingMetadata
-    summary: SummaryList
-    user_analysis: List[UsersAnalysis]
 
 

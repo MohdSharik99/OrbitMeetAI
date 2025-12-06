@@ -32,65 +32,59 @@ Return ONLY valid JSON matching this exact schema:
 ]
 """
 
+
 class ParticipantSummaryAnalyst:
-    def __init__(self, model, tools: List[BaseTool],
-                 project_id: Optional[uuid.UUID] = None,
-                 meeting_id: Optional[uuid.UUID] = None):
+    def __init__(self, model, tools: List[BaseTool]):
         self.model = model
-        self.project_id = project_id
-        self.meeting_id = meeting_id
 
         self.agent = create_agent(
             model=model,
             tools=tools,
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=SYSTEM_PROMPT
         )
 
-    def participant_analysis(self, input_transcript: str) -> str:
+    async def aparticipant_analysis(self, input_transcript: str) -> List[UserSummary]:
         """
-        Uses LLM to generate participant analysis JSON.
+        Async version that returns List[UserSummary].
 
-        Returns:
-            str : JSON output from model.
+        Expected model JSON output:
+        [
+          {
+            "participant_name": "John Doe",
+            "key_updates": ["u1", "u2"],
+            "roadblocks": ["b1"],
+            "actionable": ["a1"]
+          },
+          ...
+        ]
         """
+
         user_message = HumanMessage(content=input_transcript)
 
-        result = self.agent.invoke(
+        # Async agent execution
+        result = await self.agent.ainvoke(
             {"messages": user_message},
-            context={"user_role": "expert"}
+            context={"user_role": "expert_participant_analyst"}
         )
 
-        # result is ALWAYS {"output": "...json..."}
-        output_text = [
+        # Extract the AIMessage text
+        ai_text = next(
             m.content for m in result["messages"]
-            if m.__class__.__name__ == "AIMessage"][0]
+            if m.__class__.__name__ == "AIMessage"
+        )
 
-        return output_text
+        raw_list = json.loads(ai_text)
 
-    def parse_output_to_schema(self, text: str) -> List[UsersAnalysis]:
-        """
-        Converts JSON output into schema objects.
-
-        Returns:
-            List[UserAnalysis]
-        """
-        data = json.loads(text)
-        participant_analysis = []
-
-        for user in data:
-            summary = UserSummary(
-                participant_name=user.get("participant_name", ""),
-                key_updates=user.get("key_updates", [])[:5],
-                roadblocks=user.get("roadblocks", [])[:5],
-                actionable=user.get("actionable", [])[:5],
-            )
-
-            participant_analysis.append(
-                UsersAnalysis(
-                    project_id=self.project_id,
-                    meeting_id=self.meeting_id,
-                    participant_summary=summary
+        # Convert JSON into strongly typed UserSummary objects
+        participant_summaries = []
+        for u in raw_list:
+            participant_summaries.append(
+                UserSummary(
+                    participant_name=u.get("participant_name", ""),
+                    key_updates=u.get("key_updates", [])[:5],
+                    roadblocks=u.get("roadblocks", [])[:5],
+                    actionable=u.get("actionable", [])[:5],
                 )
             )
 
-        return participant_analysis
+        return participant_summaries

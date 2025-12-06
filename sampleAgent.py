@@ -1,10 +1,11 @@
 from src.agents.ParticipantAnalystAgent import ParticipantSummaryAnalyst
 from src.agents.MeetingSummaryAgent import MeetingSummaryAnalyst
-from src.utils.tools import orbit_meet_tool, format_normalize_tool
+from src.agents.ProjectSummaryAgent import ProjectSummaryAgent
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 from langchain.messages import AIMessage, HumanMessage
 import os
+import asyncio
 
 
 transcript = """
@@ -58,43 +59,135 @@ llm = ChatGroq(
     api_key=api_key
 )
 
-# --------------------------------------------------------------------------------------------
-# User Analysis Agent
-# --------------------------------------------------------------------------------------------
-
-# my_agent = UserAnalysisAgent(model=llm, tools= [])
-#
-# json_result = my_agent.participant_analysis(input_transcript=transcript)
-#
-# user_schema = my_agent.parse_output_to_schema(text=json_result)
-#
-# # print(json_result)
-#
-#
-# p_list = []
-# for r in user_schema:
-#     p_list.append({
-#         "participant_name": r.participant_summary.participant_name,
-#         "roadblocks": r.participant_summary.roadblocks
-#     })
-#
-# print(p_list)
-
-
-
 
 # --------------------------------------------------------------------------------------------
 # Summary analysis
-# --------------------------------------------------------------------------------------------
+# # --------------------------------------------------------------------------------------------
 
-# Usage
-my_agent = MeetingSummaryAnalyst(model=llm, tools=[])
+# # Usage
+# summary_agent = MeetingSummaryAnalyst(model=llm, tools=[])
+#
+# # Get validated Pydantic object
+# summary = asyncio.run(summary_agent.agenerate_summary(transcript))
+#
+# # This will display as a Pydantic object
+# print(summary)
 
-# Get validated Pydantic object
-summary = my_agent.generate_summary(input_transcript=transcript)
+# # --------------------------------------------------------------------------------------------
+# # Participant Analyst Agent
+# # --------------------------------------------------------------------------------------------
+# #
+# participant_agent = ParticipantSummaryAnalyst(model=llm, tools= [])
+#
+# p_result = asyncio.run(participant_agent.aparticipant_analysis(input_transcript=transcript))
+#
+#
+# # print(p_result)
+#
+# def pretty_print_user_summaries(user_summaries):
+#     for idx, item in enumerate(user_summaries, start=1):
+#         ps = item  # UserSummary object
+#         print(f"{idx}. {ps.participant_name}")
+#
+#         print("   - Key Updates:")
+#         if ps.key_updates:
+#             for k in ps.key_updates:
+#                 print(f"       • {k}")
+#         else:
+#             print("       (none)")
+#
+#         print("   - Roadblocks:")
+#         if ps.roadblocks:
+#             for r in ps.roadblocks:
+#                 print(f"       • {r}")
+#         else:
+#             print("       (none)")
+#
+#         print("   - Actionable:")
+#         if ps.actionable:
+#             for a in ps.actionable:
+#                 print(f"       • {a}")
+#         else:
+#             print("       (none)")
+#
+#         print()
+#
+# pretty_print_user_summaries(p_result)
 
-# This will display as a Pydantic object
-print(summary)
 
-
-
+# ==============================================================================================
+# Project Analyst
+# ==============================================================================================
+#
+# sample_project_data = {
+#     "project_name": "Alpha Revamp Initiative",
+#
+#     "meetings": [
+#         {
+#             "meeting_name": "Sprint Planning - Week 1",
+#             "meeting_time": "2025-12-01 10:00:00",
+#             "participants": ["John Doe", "Sarah Smith", "Michael Lee"],
+#             "summary_points": [
+#                 "Backend authentication refactor approved for this sprint.",
+#                 "Sarah will complete API gateway integration by Thursday.",
+#                 "Risk identified: delayed staging environment access might block QA."
+#             ]
+#         },
+#         {
+#             "meeting_name": "Sprint Review - Week 1",
+#             "meeting_time": "2025-12-05 16:00:00",
+#             "participants": ["John Doe", "Sarah Smith", "Michael Lee", "Aisha Khan"],
+#             "summary_points": [
+#                 "Dashboard UI redesign completed and demonstrated successfully.",
+#                 "API gateway integration is 90% finished; only testing remains.",
+#                 "No major blockers reported; team is ahead of planned velocity."
+#             ]
+#         }
+#     ],
+#
+#     "user_analysis": [
+#         {
+#             "meeting_name": "Sprint Planning - Week 1",
+#             "participant_summaries": [
+#                 {
+#                     "participant_name": "Sarah Smith",
+#                     "key_updates": ["API gateway integration scheduled for completion by Thursday"],
+#                     "roadblocks": ["Waiting for staging access approval"],
+#                     "actionable": ["Follow up with DevOps on staging access", "Complete API gateway tasks"]
+#                 },
+#                 {
+#                     "participant_name": "Michael Lee",
+#                     "key_updates": ["UI redesign prototype ready for review"],
+#                     "roadblocks": [],
+#                     "actionable": ["Final polish before end of week demo"]
+#                 }
+#             ]
+#         },
+#         {
+#             "meeting_name": "Sprint Review - Week 1",
+#             "participant_summaries": [
+#                 {
+#                     "participant_name": "Aisha Khan",
+#                     "key_updates": ["Analytics module integration test successful"],
+#                     "roadblocks": [],
+#                     "actionable": ["Prepare documentation for release notes"]
+#                 },
+#                 {
+#                     "participant_name": "John Doe",
+#                     "key_updates": ["Team velocity metrics improved by 12%"],
+#                     "roadblocks": [],
+#                     "actionable": ["Prepare next sprint board"]
+#                 }
+#             ]
+#         }
+#     ]
+# }
+#
+# project_summary_agent = ProjectSummaryAgent(model=llm, tools= [])
+#
+# project_result = asyncio.run(project_summary_agent.agenerate_project_summary(project_data=sample_project_data))
+#
+#
+# print(project_result)
+#
+#
