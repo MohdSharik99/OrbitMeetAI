@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ProjectSelector from './components/ProjectSelector';
 import SummarySection from './components/SummarySection';
 import Chatbot from './components/Chatbot';
@@ -16,6 +16,64 @@ function App() {
   const [error, setError] = useState(null);
 
   const [projectKey, setProjectKey] = useState('');
+
+  // Resizable chatbot width state (default 33.33% = 4/12 columns)
+  const [chatbotWidth, setChatbotWidth] = useState(() => {
+    const saved = localStorage.getItem('chatbotWidth');
+    return saved ? parseFloat(saved) : 33.33;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const resizeRef = useRef(null);
+
+  // Track window size for responsive behavior
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Save width to localStorage
+  useEffect(() => {
+    localStorage.setItem('chatbotWidth', chatbotWidth.toString());
+  }, [chatbotWidth]);
+
+  // Handle resize mouse events
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing || !resizeRef.current) return;
+
+      const container = resizeRef.current.parentElement;
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const newWidth = ((containerRect.width - (e.clientX - containerRect.left)) / containerRect.width) * 100;
+
+      // Constrain between 25% and 60% (left panel minimum 40%)
+      const constrainedWidth = Math.max(25, Math.min(60, newWidth));
+      setChatbotWidth(constrainedWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
 
   // Get participants from selected meeting
   const selectedMeetingData = projectData?.meetings?.find(
@@ -154,9 +212,15 @@ function App() {
         {/* Main Content Area - Full Height Split */}
         {selectedProject ? (
           <div className="flex-1 px-6 pb-6 overflow-hidden flex flex-col min-h-0">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
-              {/* Left Side - Analysis (8 columns) with Project Selector */}
-              <div className="lg:col-span-8 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col lg:flex-row min-h-0 gap-6" ref={resizeRef}>
+              {/* Left Side - Analysis with Project Selector */}
+              <div 
+                className="flex flex-col min-h-0 flex-shrink w-full lg:w-auto"
+                style={{ 
+                  width: isDesktop ? `${100 - chatbotWidth}%` : '100%',
+                  minWidth: isDesktop ? '40%' : '100%'
+                }}
+              >
                 <div className={`${theme === 'dark' ? 'bg-gray-800/90 border-gray-700' : 'bg-white/90 border-gray-200'} backdrop-blur-sm rounded-xl shadow-xl border p-6 h-full flex flex-col overflow-hidden transition-colors duration-300`}>
                   {/* Project Selector - Inside Left Panel */}
                   <div className="mb-6 flex-shrink-0">
@@ -262,8 +326,33 @@ function App() {
                 </div>
               </div>
 
-              {/* Right Side - Chat Only (4 columns) - Fixed Height Independent of Left Panel */}
-              <div className="lg:col-span-4 flex flex-col h-full min-h-0">
+              {/* Resizer Handle */}
+              <div
+                className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsResizing(true);
+                }}
+                style={{
+                  backgroundColor: isResizing 
+                    ? '#B56727' 
+                    : theme === 'dark' 
+                      ? 'rgba(75, 85, 99, 0.5)' 
+                      : 'rgba(209, 213, 219, 0.5)'
+                }}
+              >
+                <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-1 bg-[#B56727] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="absolute inset-y-0 -left-2 -right-2 z-10"></div>
+              </div>
+
+              {/* Right Side - Chat - Resizable Width */}
+              <div 
+                className="flex flex-col h-full min-h-0 flex-shrink-0 w-full lg:w-auto"
+                style={{ 
+                  width: isDesktop ? `${chatbotWidth}%` : '100%',
+                  minWidth: isDesktop ? '25%' : '100%'
+                }}
+              >
                 <Chatbot
                   projectName={selectedProject}
                   meetingName={selectedMeeting}
@@ -274,9 +363,12 @@ function App() {
         ) : (
           /* Empty State - Split Layout */
           <div className="flex-1 px-6 pb-6 overflow-hidden flex flex-col min-h-0">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+            <div className="flex-1 flex flex-col lg:flex-row min-h-0 gap-6" ref={resizeRef}>
               {/* Left Side - Empty State with Project Selector */}
-              <div className="lg:col-span-8 flex flex-col min-h-0">
+              <div 
+                className="flex flex-col min-h-0 w-full lg:w-auto flex-shrink"
+                style={{ width: isDesktop ? `${100 - chatbotWidth}%` : '100%' }}
+              >
                 <div className={`${theme === 'dark' ? 'bg-gray-800/90 border-gray-700' : 'bg-white/90 border-gray-200'} backdrop-blur-sm rounded-xl shadow-xl border p-6 h-full flex flex-col transition-colors duration-300`}>
                   {/* Project Selector - Inside Left Panel */}
                   <div className="mb-6 flex-shrink-0">
@@ -310,8 +402,33 @@ function App() {
                 </div>
               </div>
 
-              {/* Right Side - Chat Only (4 columns) */}
-              <div className="lg:col-span-4 flex flex-col h-full min-h-0">
+              {/* Resizer Handle */}
+              <div
+                className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsResizing(true);
+                }}
+                style={{
+                  backgroundColor: isResizing 
+                    ? '#B56727' 
+                    : theme === 'dark' 
+                      ? 'rgba(75, 85, 99, 0.5)' 
+                      : 'rgba(209, 213, 219, 0.5)'
+                }}
+              >
+                <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-1 bg-[#B56727] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="absolute inset-y-0 -left-2 -right-2 z-10"></div>
+              </div>
+
+              {/* Right Side - Chat - Resizable Width */}
+              <div 
+                className="flex flex-col h-full min-h-0 w-full lg:w-auto flex-shrink-0"
+                style={{ 
+                  width: isDesktop ? `${chatbotWidth}%` : '100%',
+                  minWidth: isDesktop ? '25%' : '100%'
+                }}
+              >
                 <Chatbot
                   projectName={selectedProject}
                   meetingName={selectedMeeting}

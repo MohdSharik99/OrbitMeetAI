@@ -191,14 +191,14 @@ llm = ChatGroq(
 # =======================================================================================================
 
 # from src.utils.store_to_mongodb import extract_transcripts, process_transcript, add_transcript_to_mongo
-#
-#
+
+
 # transcript_path = r"C:\Users\mohds\PycharmProjects\OrbitMeetAI\SampleData\Transcripts\ProjectPhoenix.docx"
-#
+
 # transcript = extract_transcripts([transcript_path])
 # meta = process_transcript(transcript)
 # save_transcript = add_transcript_to_mongo(transcript_path)
-#
+
 # print(save_transcript)
 
 
