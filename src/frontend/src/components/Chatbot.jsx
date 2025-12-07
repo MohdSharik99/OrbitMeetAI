@@ -114,17 +114,17 @@ const Chatbot = ({ projectName, meetingName }) => {
   return (
     <div className={`flex flex-col h-full w-full min-h-0 ${containerBg} backdrop-blur-sm rounded-xl shadow-2xl border overflow-hidden transition-colors duration-300`}>
       {/* Professional Chat Header */}
-      <div className={`${headerBg} text-white p-5 rounded-t-xl flex-shrink-0`}>
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className={`${headerBg} text-white p-3 rounded-t-xl flex-shrink-0`}>
+        <div className="flex items-center space-x-2">
+          <div className="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-xl">AI Assistant</h3>
+            <h3 className="font-bold text-base">AI Assistant</h3>
             {projectName && meetingName && (
-              <p className="text-sm text-white/90 mt-0.5 font-medium">
+              <p className="text-xs text-white/90 mt-0.5 font-medium">
                 {projectName.length > 20 ? projectName.substring(0, 20) + '...' : projectName}
               </p>
             )}

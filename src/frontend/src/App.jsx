@@ -27,8 +27,6 @@ function App() {
     const saved = localStorage.getItem('chatbotVisible');
     return saved ? saved === 'true' : true; // Default to visible
   });
-  const [isAnalysisCollapsed, setIsAnalysisCollapsed] = useState(false);
-  const [isChatbotCollapsed, setIsChatbotCollapsed] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const resizeRef = useRef(null);
 
@@ -50,53 +48,53 @@ function App() {
     localStorage.setItem('chatbotVisible', isChatbotVisible.toString());
   }, [isChatbotVisible]);
 
-  // Collapse/expand handlers
-  const handleCollapseAnalysis = () => {
-    setIsAnalysisCollapsed(true);
-    setIsChatbotCollapsed(false);
-    setChatbotWidth(95); // Chatbot takes 95% when analysis is collapsed
-  };
-
-  const handleCollapseChatbot = () => {
-    setIsChatbotCollapsed(true);
-    setIsAnalysisCollapsed(false);
-    setChatbotWidth(5); // Chatbot takes 5% when collapsed
-  };
-
-  const handleExpandBoth = () => {
-    setIsAnalysisCollapsed(false);
-    setIsChatbotCollapsed(false);
-    setChatbotWidth(20); // Reset to default split (20% chatbot, 80% analysis)
-  };
-
   // Handle resize mouse events for draggable separator
   useEffect(() => {
+    let animationFrameId = null;
+
     const handleMouseMove = (e) => {
       if (!isResizing || !resizeRef.current) return;
 
-      const container = resizeRef.current.parentElement;
-      if (!container) return;
+      // Use requestAnimationFrame for smooth updates
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
 
-      const containerRect = container.getBoundingClientRect();
-      const newWidth = ((containerRect.width - (e.clientX - containerRect.left)) / containerRect.width) * 100;
+      animationFrameId = requestAnimationFrame(() => {
+        const container = resizeRef.current.parentElement;
+        if (!container) return;
 
-      // Allow full range: 5% to 95% (allows both sides to take almost full screen)
-      const constrainedWidth = Math.max(5, Math.min(95, newWidth));
-      setChatbotWidth(constrainedWidth);
+        const containerRect = container.getBoundingClientRect();
+        // Calculate chatbot width based on mouse position from right edge
+        // Mouse X position relative to container
+        const mouseX = e.clientX - containerRect.left;
+        // Calculate percentage from right (chatbot is on the right)
+        const newWidth = ((containerRect.width - mouseX) / containerRect.width) * 100;
+
+        // Allow full range: 5% to 95% (allows both sides to take almost full screen)
+        const constrainedWidth = Math.max(5, Math.min(95, newWidth));
+        setChatbotWidth(constrainedWidth);
+      });
     };
 
     const handleMouseUp = () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
       setIsResizing(false);
     };
 
     if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mousemove', handleMouseMove, { passive: true });
       document.addEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
     }
 
     return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = '';
@@ -275,12 +273,9 @@ function App() {
             <div className="flex-1 flex flex-col lg:flex-row min-h-0 gap-6" ref={resizeRef}>
               {/* Left Side - Analysis with Project Selector */}
               <div 
-                className={`flex flex-col min-h-0 flex-shrink w-full lg:w-auto transition-all duration-300 ${
-                  isAnalysisCollapsed ? 'lg:w-[5%]' : ''
-                }`}
+                className="flex flex-col min-h-0 flex-shrink w-full lg:w-auto transition-all duration-300"
                 style={{ 
-                  width: isDesktop && isChatbotVisible && !isAnalysisCollapsed ? `${100 - chatbotWidth}%` : 
-                         isDesktop && isChatbotVisible && isAnalysisCollapsed ? '5%' : '100%',
+                  width: isDesktop && isChatbotVisible ? `${100 - chatbotWidth}%` : '100%',
                   minWidth: isDesktop && isChatbotVisible ? '5%' : '100%'
                 }}
               >
@@ -328,56 +323,6 @@ function App() {
                                   {participant}
                                 </span>
                               ))}
-                            </div>
-                          )}
-                          {/* Collapse/Expand Buttons */}
-                          {isDesktop && isChatbotVisible && (
-                            <div className="flex items-center gap-2 ml-auto">
-                              {!isAnalysisCollapsed && !isChatbotCollapsed && (
-                                <>
-                                  <button
-                                    onClick={handleCollapseAnalysis}
-                                    className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                                      theme === 'dark'
-                                        ? 'bg-gray-700 text-white hover:bg-gray-600'
-                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                    }`}
-                                    title="Collapse Analysis"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
-                                  </button>
-                                  <button
-                                    onClick={handleCollapseChatbot}
-                                    className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                                      theme === 'dark'
-                                        ? 'bg-gray-700 text-white hover:bg-gray-600'
-                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                    }`}
-                                    title="Collapse Chatbot"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                  </button>
-                                </>
-                              )}
-                              {(isAnalysisCollapsed || isChatbotCollapsed) && (
-                                <button
-                                  onClick={handleExpandBoth}
-                                  className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                                    theme === 'dark'
-                                      ? 'bg-[#B56727] text-white hover:bg-[#d17a3a]'
-                                      : 'bg-[#B56727] text-white hover:bg-[#d17a3a]'
-                                  }`}
-                                  title="Expand Both"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                  </svg>
-                                </button>
-                              )}
                             </div>
                           )}
                         </div>
@@ -428,11 +373,12 @@ function App() {
               </div>
 
               {/* Draggable Separator Line */}
-              {isChatbotVisible && !isAnalysisCollapsed && !isChatbotCollapsed && (
+              {isChatbotVisible && (
                 <div
-                  className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative"
+                  className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative z-20"
                   onMouseDown={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     setIsResizing(true);
                   }}
                   style={{
@@ -451,12 +397,9 @@ function App() {
               {/* Right Side - Chat - Collapsible Width - Only show when visible */}
               {isChatbotVisible && (
                 <div 
-                  className={`flex flex-col h-full min-h-0 flex-shrink-0 w-full lg:w-auto transition-all duration-300 ${
-                    isChatbotCollapsed ? 'lg:w-[5%]' : ''
-                  }`}
+                  className="flex flex-col h-full min-h-0 flex-shrink-0 w-full lg:w-auto transition-all duration-300"
                   style={{ 
-                    width: isDesktop && !isChatbotCollapsed ? `${chatbotWidth}%` : 
-                           isDesktop && isChatbotCollapsed ? '5%' : '100%',
+                    width: isDesktop ? `${chatbotWidth}%` : '100%',
                     minWidth: isDesktop ? '5%' : '100%'
                   }}
                 >
@@ -474,12 +417,9 @@ function App() {
             <div className="flex-1 flex flex-col lg:flex-row min-h-0 gap-6" ref={resizeRef}>
               {/* Left Side - Empty State with Project Selector */}
               <div 
-                className={`flex flex-col min-h-0 w-full lg:w-auto flex-shrink transition-all duration-300 ${
-                  isAnalysisCollapsed ? 'lg:w-[5%]' : ''
-                }`}
+                className="flex flex-col min-h-0 w-full lg:w-auto flex-shrink transition-all duration-300"
                 style={{ 
-                  width: isDesktop && isChatbotVisible && !isAnalysisCollapsed ? `${100 - chatbotWidth}%` : 
-                         isDesktop && isChatbotVisible && isAnalysisCollapsed ? '5%' : '100%'
+                  width: isDesktop && isChatbotVisible ? `${100 - chatbotWidth}%` : '100%'
                 }}
               >
                 <div className={`${theme === 'dark' ? 'bg-gray-800/90 border-gray-700' : 'bg-white/90 border-gray-200'} backdrop-blur-sm rounded-xl shadow-xl border p-6 h-full flex flex-col transition-colors duration-300`}>
@@ -508,11 +448,12 @@ function App() {
               </div>
 
               {/* Draggable Separator Line */}
-              {isChatbotVisible && !isAnalysisCollapsed && !isChatbotCollapsed && (
+              {isChatbotVisible && (
                 <div
-                  className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative"
+                  className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative z-20"
                   onMouseDown={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     setIsResizing(true);
                   }}
                   style={{
@@ -531,12 +472,9 @@ function App() {
               {/* Right Side - Chat - Collapsible Width - Only show when visible */}
               {isChatbotVisible && (
                 <div 
-                  className={`flex flex-col h-full min-h-0 w-full lg:w-auto flex-shrink-0 transition-all duration-300 ${
-                    isChatbotCollapsed ? 'lg:w-[5%]' : ''
-                  }`}
+                  className="flex flex-col h-full min-h-0 w-full lg:w-auto flex-shrink-0 transition-all duration-300"
                   style={{ 
-                    width: isDesktop && !isChatbotCollapsed ? `${chatbotWidth}%` : 
-                           isDesktop && isChatbotCollapsed ? '5%' : '100%',
+                    width: isDesktop ? `${chatbotWidth}%` : '100%',
                     minWidth: isDesktop ? '5%' : '100%'
                   }}
                 >
