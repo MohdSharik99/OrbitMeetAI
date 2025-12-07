@@ -23,7 +23,6 @@ from src.Agentic.agents.Orchestrator import build_orchestrator_graph, Orchestrat
 
 # Import tools
 from src.Agentic.utils import save_summaries_to_mongo, fetch_project_data_from_mongo, send_project_emails, save_project_summary_to_mongo
-from loguru import logger
 
 # Load environment variables
 load_dotenv()
@@ -138,7 +137,6 @@ class ProjectDataResponse(BaseModel):
     project_name: str
     meetings: List[Dict[str, Any]]
     user_analysis: List[Dict[str, Any]]
-    global_summary: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -246,7 +244,7 @@ async def get_project_data(project_key: str):
     """
     Fetch complete project data from MongoDB.
     
-    Returns meeting summaries, participant analysis, and global summary for a given project.
+    Returns meeting summaries and participant analysis for a given project.
     """
     try:
         project_data = await fetch_project_data_from_mongo.ainvoke({
@@ -259,27 +257,11 @@ async def get_project_data(project_key: str):
                 detail=project_data["error"]
             )
         
-        # Fetch global summary from Project_summary collection
-        global_summary = None
-        try:
-            mongo_uri = os.getenv("MONGO_URI")
-            if mongo_uri:
-                client = MongoClient(mongo_uri, tls=True, tlsCAFile=certifi.where())
-                db = client["OMNI_MEET_DB"]
-                summary_col = db["Project_summary"]
-                summary_doc = summary_col.find_one({"project_key": project_key})
-                if summary_doc:
-                    global_summary = summary_doc.get("global_summary")
-        except Exception as e:
-            # If we can't fetch global summary, just continue without it
-            logger.warning(f"Could not fetch global summary: {e}")
-        
         return ProjectDataResponse(
             project_key=project_data["project_key"],
             project_name=project_data["project_name"],
             meetings=project_data.get("meetings", []),
-            user_analysis=project_data.get("user_analysis", []),
-            global_summary=global_summary
+            user_analysis=project_data.get("user_analysis", [])
         )
     
     except HTTPException:
@@ -405,19 +387,14 @@ async def orbit_chat(request: ChatRequest):
     try:
         from src.chatbot.orbit_chat import chat_with_project, find_project_by_name
         
-        logger.info(f"Chat request for project: {request.project_name}")
-        
         # Find project by name
         project_id = find_project_by_name(request.project_name)
         
         if not project_id:
-            logger.warning(f"Project not found: {request.project_name}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Project '{request.project_name}' not found"
             )
-        
-        logger.info(f"Found project_id: {project_id}, processing question...")
         
         # Chat with project
         result = await chat_with_project(
@@ -425,8 +402,6 @@ async def orbit_chat(request: ChatRequest):
             question=request.question,
             chat_history=request.chat_history
         )
-        
-        logger.success(f"Chat response generated successfully for project {project_id}")
         
         return ChatResponse(
             answer=result["answer"],
@@ -437,121 +412,14 @@ async def orbit_chat(request: ChatRequest):
     except HTTPException:
         raise
     except ValueError as e:
-        logger.error(f"ValueError in chat: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Error in chat endpoint: {e}", exc_info=True)
-        error_detail = str(e)
-        # Provide more helpful error messages
-        if "VOYAGE_API_KEY" in error_detail or "voyage" in error_detail.lower():
-            error_detail = "Voyage AI API key not configured. Please set VOYAGE_API_KEY in your environment variables."
-        elif "MONGO_URI" in error_detail or "mongo" in error_detail.lower():
-            error_detail = "MongoDB connection error. Please check your MONGO_URI configuration."
-        elif "GROQ_API_KEY" in error_detail or "groq" in error_detail.lower():
-            error_detail = "Groq API key not configured. Please set GROQ_API_KEY in your environment variables."
-        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error in chat: {error_detail}"
-        )
-
-
-@app.get("/transcripts")
-async def get_all_transcripts():
-    """
-    Get all transcripts with project and meeting information.
-    
-    Returns a list of all projects with their meetings for the frontend dropdown.
-    """
-    try:
-        mongo_uri = os.getenv("MONGO_URI")
-        if not mongo_uri:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="MONGO_URI not configured"
-            )
-        
-        client = MongoClient(mongo_uri, tls=True, tlsCAFile=certifi.where())
-        db = client["OMNI_MEET_DB"]
-        collection = db["Raw_Transcripts"]
-        
-        # Fetch all documents
-        docs = list(collection.find({}, {
-            "Project_key": 1,
-            "Project_name": 1,
-            "meetings.meeting_name": 1,
-            "meetings.meeting_time": 1,
-        }))
-        
-        # Format response
-        transcripts = []
-        for doc in docs:
-            transcripts.append({
-                "project_id": str(doc["_id"]),
-                "project_key": doc.get("Project_key", ""),
-                "project_name": doc.get("Project_name", "Unknown Project"),
-                "meetings": doc.get("meetings", []),
-            })
-        
-        return transcripts
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching transcripts: {str(e)}"
-        )
-
-
-@app.get("/projects")
-async def get_all_projects():
-    """
-    Get all unique projects.
-    
-    Returns a list of all unique project names and keys.
-    """
-    try:
-        mongo_uri = os.getenv("MONGO_URI")
-        if not mongo_uri:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="MONGO_URI not configured"
-            )
-        
-        client = MongoClient(mongo_uri, tls=True, tlsCAFile=certifi.where())
-        db = client["OMNI_MEET_DB"]
-        collection = db["Raw_Transcripts"]
-        
-        # Fetch all unique projects
-        projects = list(collection.find({}, {
-            "Project_key": 1,
-            "Project_name": 1,
-        }).distinct("Project_key"))
-        
-        # Get full project details
-        project_list = []
-        seen_keys = set()
-        
-        for doc in collection.find({}, {
-            "Project_key": 1,
-            "Project_name": 1,
-        }):
-            project_key = doc.get("Project_key")
-            if project_key and project_key not in seen_keys:
-                seen_keys.add(project_key)
-                project_list.append({
-                    "project_key": project_key,
-                    "project_name": doc.get("Project_name", "Unknown Project"),
-                })
-        
-        return project_list
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching projects: {str(e)}"
+            detail=f"Error in chat: {str(e)}"
         )
 
 

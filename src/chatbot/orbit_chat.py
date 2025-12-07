@@ -1,6 +1,6 @@
 """
-OrbitMeetAI Chatbot - RAG-based chatbot using MongoDB Vector Search and Voyage AI embeddings.
-Uses meeting transcripts from MongoDB to provide context-aware answers.
+OrbitMeetAI Chatbot - Simple document-based chatbot using MongoDB Raw Transcripts.
+Fetches full transcripts from MongoDB and uses LLM for question answering.
 """
 import os
 from typing import List, Dict, Any, Optional
@@ -10,13 +10,9 @@ from bson.errors import InvalidId
 import certifi
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 from loguru import logger
-import requests
-import numpy as np
 
 load_dotenv()
 
@@ -36,172 +32,22 @@ logger.add(
 # GLOBAL STATE
 # ======================================================================
 mongo_uri = os.getenv("MONGO_URI")
-voyage_api_key = os.getenv("VOYAGE_API_KEY")
-chatbot_instances: Dict[str, Any] = {}  # Cache chatbot instances by project_id
+chatbot_instances: Dict[str, Any] = {}  # Cache chatbot chains by project_id
 
 
 # ======================================================================
-# VOYAGE AI EMBEDDINGS
+# FETCH FULL TRANSCRIPT TEXT FROM MONGODB
 # ======================================================================
-class VoyageEmbeddings:
-    """Wrapper for Voyage AI embeddings API"""
-    
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.base_url = "https://api.voyageai.com/v1/embeddings"
-        self.model = "voyage-2"  # or "voyage-large-2" for better quality
-    
-    def embed_query(self, text: str) -> List[float]:
-        """Generate embedding for a single query"""
-        return self.embed_documents([text])[0]
-    
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings for multiple documents"""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "input": texts,
-            "model": self.model
-        }
-        
-        response = requests.post(self.base_url, json=data, headers=headers)
-        response.raise_for_status()
-        
-        result = response.json()
-        return [item["embedding"] for item in result["data"]]
-
-
-# ======================================================================
-# MONGODB VECTOR STORE
-# ======================================================================
-class MongoDBVectorStore:
-    """MongoDB-based vector store for transcript embeddings"""
-    
-    def __init__(self, mongo_uri: str, db_name: str, collection_name: str, embeddings):
-        self.client = MongoClient(mongo_uri, tls=True, tlsCAFile=certifi.where())
-        self.db = self.client[db_name]
-        self.collection = self.db[collection_name]
-        self.embeddings = embeddings
-    
-    def add_documents(self, documents: List[Document], project_id: str):
-        """Add documents with embeddings to MongoDB"""
-        texts = [doc.page_content for doc in documents]
-        embeddings = self.embeddings.embed_documents(texts)
-        
-        # Prepare documents for MongoDB
-        mongo_docs = []
-        for doc, embedding in zip(documents, embeddings):
-            mongo_doc = {
-                "project_id": project_id,
-                "text": doc.page_content,
-                "embedding": embedding,
-                "metadata": doc.metadata,
-                "meeting_name": doc.metadata.get("meeting_name", ""),
-                "meeting_time": doc.metadata.get("meeting_time", ""),
-                "participants": doc.metadata.get("participants", "")
-            }
-            mongo_docs.append(mongo_doc)
-        
-        # Insert into MongoDB
-        if mongo_docs:
-            self.collection.insert_many(mongo_docs)
-            logger.info(f"Inserted {len(mongo_docs)} documents into vector store")
-    
-    def similarity_search(self, query: str, project_id: str, k: int = 5) -> List[Document]:
-        """Search for similar documents using vector similarity"""
-        # Generate query embedding
-        query_embedding = self.embeddings.embed_query(query)
-        
-        # Use MongoDB aggregation pipeline for vector search
-        # Note: This requires a vector search index in MongoDB Atlas
-        pipeline = [
-            {
-                "$vectorSearch": {
-                    "index": "vector_index",  # Name of your vector search index
-                    "path": "embedding",
-                    "queryVector": query_embedding,
-                    "numCandidates": k * 10,
-                    "limit": k
-                }
-            },
-            {
-                "$match": {
-                    "project_id": project_id
-                }
-            },
-            {
-                "$project": {
-                    "text": 1,
-                    "metadata": 1,
-                    "meeting_name": 1,
-                    "score": {"$meta": "vectorSearchScore"}
-                }
-            }
-        ]
-        
-        try:
-            results = list(self.collection.aggregate(pipeline))
-        except Exception as e:
-            # Fallback to cosine similarity if vector search index doesn't exist
-            logger.warning(f"Vector search index not found, using cosine similarity: {e}")
-            results = self._cosine_similarity_search(query_embedding, project_id, k)
-        
-        # Convert to LangChain Documents
-        documents = []
-        for result in results:
-            doc = Document(
-                page_content=result["text"],
-                metadata={
-                    **result.get("metadata", {}),
-                    "meeting_name": result.get("meeting_name", ""),
-                    "score": result.get("score", 0.0)
-                }
-            )
-            documents.append(doc)
-        
-        return documents
-    
-    def _cosine_similarity_search(self, query_embedding: List[float], project_id: str, k: int) -> List[Dict]:
-        """Fallback: Manual cosine similarity search"""
-        # Fetch all documents for the project
-        all_docs = list(self.collection.find({"project_id": project_id}))
-        
-        if not all_docs:
-            return []
-        
-        # Calculate cosine similarity
-        query_vec = np.array(query_embedding)
-        similarities = []
-        
-        for doc in all_docs:
-            doc_vec = np.array(doc.get("embedding", []))
-            if len(doc_vec) > 0:
-                # Cosine similarity
-                similarity = np.dot(query_vec, doc_vec) / (np.linalg.norm(query_vec) * np.linalg.norm(doc_vec))
-                similarities.append((similarity, doc))
-        
-        # Sort by similarity and return top k
-        similarities.sort(key=lambda x: x[0], reverse=True)
-        return [{"text": doc["text"], "metadata": doc.get("metadata", {}), 
-                "meeting_name": doc.get("meeting_name", ""), "score": sim} 
-                for sim, doc in similarities[:k]]
-
-
-# ======================================================================
-# FETCH MEETING TRANSCRIPTS FROM MONGODB
-# ======================================================================
-def fetch_project_transcripts(project_id: str) -> List[Dict[str, Any]]:
+def fetch_project_transcript_text(project_id: str) -> str:
     """
-    Fetch all meeting transcripts for a given project_id from MongoDB.
+    Fetch full transcript text for a given project_id from MongoDB Raw_Transcripts collection.
+    Combines all meeting transcripts into a single text string.
     
     Args:
         project_id: MongoDB ObjectId as string
         
     Returns:
-        List of meeting documents with transcripts
+        Combined transcript text from all meetings
     """
     if not mongo_uri:
         raise ValueError("MONGO_URI not configured")
@@ -227,8 +73,11 @@ def fetch_project_transcripts(project_id: str) -> List[Dict[str, Any]]:
         project_name = doc.get("Project_name", "Unknown Project")
         meetings = doc.get("meetings", [])
         
-        # Extract transcripts
-        meeting_data = []
+        # Combine all transcripts into a single text
+        transcript_parts = []
+        transcript_parts.append(f"Project: {project_name}\n")
+        transcript_parts.append("=" * 80 + "\n\n")
+        
         for meeting in meetings:
             meeting_name = meeting.get("meeting_name", "Unknown Meeting")
             meeting_time = meeting.get("meeting_time", "")
@@ -244,149 +93,33 @@ def fetch_project_transcripts(project_id: str) -> List[Dict[str, Any]]:
                     transcript_text = str(transcript_list)
             
             if transcript_text:
-                meeting_data.append({
-                    "meeting_name": meeting_name,
-                    "meeting_time": meeting_time,
-                    "participants": participants,
-                    "transcript": transcript_text
-                })
+                transcript_parts.append(f"Meeting: {meeting_name}\n")
+                transcript_parts.append(f"Time: {meeting_time}\n")
+                transcript_parts.append(f"Participants: {', '.join(participants) if participants else 'N/A'}\n")
+                transcript_parts.append("-" * 80 + "\n")
+                transcript_parts.append(f"Transcript:\n{transcript_text}\n")
+                transcript_parts.append("=" * 80 + "\n\n")
         
-        logger.info(f"Fetched {len(meeting_data)} meetings for project '{project_name}'")
-        return meeting_data
+        full_text = "".join(transcript_parts)
+        logger.info(f"Fetched transcript text for project '{project_name}' ({len(full_text)} characters)")
+        return full_text
     
     except Exception as e:
-        logger.error(f"Error fetching transcripts: {e}")
+        logger.error(f"Error fetching transcript text: {e}")
         raise
 
 
 # ======================================================================
-# CREATE VECTOR STORE FROM TRANSCRIPTS
+# BUILD SIMPLE CHATBOT CHAIN
 # ======================================================================
-def create_vector_store(meetings: List[Dict[str, Any]], project_id: str) -> MongoDBVectorStore:
+def build_chatbot_chain() -> Any:
     """
-    Create a MongoDB vector store from meeting transcripts.
+    Build a simple chatbot chain using prompt | llm | StrOutputParser.
+    Similar to the example provided - no RAG, just direct document context.
     
-    Args:
-        meetings: List of meeting dictionaries with transcripts
-        project_id: Project ID for unique vector store
-        
     Returns:
-        MongoDBVectorStore instance
+        LangChain chain (prompt | llm | StrOutputParser)
     """
-    if not meetings:
-        raise ValueError("No meetings found to create vector store")
-    
-    if not voyage_api_key:
-        raise ValueError("VOYAGE_API_KEY not configured")
-    
-    # Initialize embeddings
-    embeddings = VoyageEmbeddings(voyage_api_key)
-    
-    # Create vector store
-    vector_store = MongoDBVectorStore(
-        mongo_uri=mongo_uri,
-        db_name="OMNI_MEET_DB",
-        collection_name="Transcripts_vectorDB",
-        embeddings=embeddings
-    )
-    
-    # Check if documents already exist for this project
-    existing_count = vector_store.collection.count_documents({"project_id": project_id})
-    
-    if existing_count > 0:
-        logger.info(f"Vector store already exists for project {project_id} with {existing_count} documents")
-        return vector_store
-    
-    # Create documents
-    documents = []
-    for meeting in meetings:
-        # Create a formatted document with metadata
-        content = f"""
-Meeting: {meeting['meeting_name']}
-Time: {meeting['meeting_time']}
-Participants: {', '.join(meeting['participants'])}
-
-Transcript:
-{meeting['transcript']}
-"""
-        doc = Document(
-            page_content=content,
-            metadata={
-                "meeting_name": meeting['meeting_name'],
-                "meeting_time": meeting['meeting_time'],
-                "participants": ', '.join(meeting['participants'])
-            }
-        )
-        documents.append(doc)
-    
-    # Split documents into chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
-    )
-    splits = text_splitter.split_documents(documents)
-    
-    # Add to MongoDB vector store
-    vector_store.add_documents(splits, project_id)
-    
-    logger.info(f"Created vector store with {len(splits)} chunks for project {project_id}")
-    return vector_store
-
-
-# ======================================================================
-# MONGODB RETRIEVER
-# ======================================================================
-class MongoDBRetriever:
-    """LangChain retriever for MongoDB vector store"""
-    
-    def __init__(self, vector_store: MongoDBVectorStore, project_id: str, k: int = 5):
-        self.vector_store = vector_store
-        self.project_id = project_id
-        self.k = k
-    
-    def get_relevant_documents(self, query: str) -> List[Document]:
-        """Retrieve relevant documents for a query"""
-        return self.vector_store.similarity_search(query, self.project_id, self.k)
-    
-    async def aget_relevant_documents(self, query: str) -> List[Document]:
-        """Async version of get_relevant_documents"""
-        return self.get_relevant_documents(query)
-
-
-# ======================================================================
-# INITIALIZE CHATBOT
-# ======================================================================
-def initialize_chatbot(project_id: str, force_refresh: bool = False):
-    """
-    Initialize or retrieve a chatbot instance for a given project.
-    
-    Args:
-        project_id: MongoDB ObjectId as string
-        force_refresh: If True, recreate the vector store even if cached
-        
-    Returns:
-        ConversationalRetrievalChain instance
-    """
-    # Check cache
-    if project_id in chatbot_instances and not force_refresh:
-        logger.info(f"Using cached chatbot for project {project_id}")
-        return chatbot_instances[project_id]
-    
-    logger.info(f"Initializing chatbot for project {project_id}")
-    
-    # Fetch transcripts
-    meetings = fetch_project_transcripts(project_id)
-    
-    if not meetings:
-        raise ValueError(f"No meetings found for project {project_id}")
-    
-    # Create vector store
-    vector_store = create_vector_store(meetings, project_id)
-    
-    # Create retriever
-    retriever = MongoDBRetriever(vector_store, project_id, k=5)
-    
     # Initialize LLM
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
@@ -398,27 +131,68 @@ def initialize_chatbot(project_id: str, force_refresh: bool = False):
         api_key=api_key
     )
     
-    # Create memory for conversation
-    memory = ConversationBufferMemory(
-        memory_key="chat_history",
-        return_messages=True,
-        output_key="answer"
-    )
+    # Create prompt template
+    prompt = ChatPromptTemplate.from_template("""
+You are a helpful AI assistant for meeting analysis. You must answer ONLY from the document content given below.
+
+If the answer is not found in the document, reply EXACTLY:
+"I don't know based on the document."
+
+Document:
+{document}
+
+User Question:
+{question}
+""")
     
-    # Create conversational retrieval chain
-    qa_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=retriever,
-        memory=memory,
-        return_source_documents=True,
-        verbose=False
-    )
+    # Create simple chain: prompt | llm | StrOutputParser
+    chain = prompt | llm | StrOutputParser()
     
-    # Cache the instance
-    chatbot_instances[project_id] = qa_chain
+    return chain
+
+
+
+
+
+# ======================================================================
+# INITIALIZE CHATBOT
+# ======================================================================
+def initialize_chatbot(project_id: str, force_refresh: bool = False):
+    """
+    Initialize or retrieve a chatbot chain for a given project.
+    Fetches transcript text and builds a simple chain (no RAG).
+    
+    Args:
+        project_id: MongoDB ObjectId as string
+        force_refresh: If True, refetch transcript even if cached
+        
+    Returns:
+        Dictionary with 'chain' and 'document_text'
+    """
+    # Check cache
+    if project_id in chatbot_instances and not force_refresh:
+        logger.info(f"Using cached chatbot for project {project_id}")
+        return chatbot_instances[project_id]
+    
+    logger.info(f"Initializing chatbot for project {project_id}")
+    
+    # Fetch full transcript text from MongoDB
+    document_text = fetch_project_transcript_text(project_id)
+    
+    if not document_text or len(document_text.strip()) == 0:
+        raise ValueError(f"No transcript text found for project {project_id}")
+    
+    # Build simple chain
+    chain = build_chatbot_chain()
+    
+    # Cache the instance (chain + document text)
+    chatbot_instances[project_id] = {
+        "chain": chain,
+        "document_text": document_text
+    }
     
     logger.success(f"Chatbot initialized for project {project_id}")
-    return qa_chain
+    return chatbot_instances[project_id]
 
 
 # ======================================================================
@@ -426,52 +200,45 @@ def initialize_chatbot(project_id: str, force_refresh: bool = False):
 # ======================================================================
 async def chat_with_project(project_id: str, question: str, chat_history: Optional[List] = None) -> Dict[str, Any]:
     """
-    Chat with the project chatbot.
+    Chat with the project chatbot using simple document-based approach (no RAG).
     
     Args:
         project_id: MongoDB ObjectId as string
         question: User's question
-        chat_history: Optional list of previous messages for context
+        chat_history: Optional list of previous messages for context (not used in simple approach)
         
     Returns:
         Dictionary with answer and metadata
     """
     try:
-        # Initialize chatbot
-        qa_chain = initialize_chatbot(project_id)
+        # Initialize chatbot (gets chain + document text)
+        chatbot_data = initialize_chatbot(project_id)
+        chain = chatbot_data["chain"]
+        document_text = chatbot_data["document_text"]
         
-        # Prepare chat history if provided
-        if chat_history:
-            # Reset memory and add history
-            qa_chain.memory.clear()
-            for msg in chat_history:
-                if msg.get("role") == "user":
-                    qa_chain.memory.chat_memory.add_user_message(msg.get("content", ""))
-                elif msg.get("role") == "assistant":
-                    qa_chain.memory.chat_memory.add_ai_message(msg.get("content", ""))
+        # Invoke chain with document and question
+        answer = await chain.ainvoke({
+            "document": document_text,
+            "question": question
+        })
         
-        # Get answer
-        result = await qa_chain.ainvoke({"question": question})
+        logger.info(f"Generated answer for question: '{question[:50]}...'")
         
-        # Extract answer and sources
-        answer = result.get("answer", "I couldn't generate an answer.")
-        source_docs = result.get("source_documents", [])
-        
-        # Extract source meeting names
+        # Extract meeting names from document text for sources
         sources = []
-        for doc in source_docs:
-            metadata = doc.metadata
-            if "meeting_name" in metadata:
-                sources.append(metadata["meeting_name"])
+        if "Meeting:" in document_text:
+            import re
+            meeting_matches = re.findall(r"Meeting: ([^\n]+)", document_text)
+            sources = list(set(meeting_matches))
         
         return {
             "answer": answer,
-            "sources": list(set(sources)),  # Remove duplicates
+            "sources": sources,
             "project_id": project_id
         }
     
     except Exception as e:
-        logger.error(f"Error in chat: {e}")
+        logger.error(f"Error in chat: {e}", exc_info=True)
         raise
 
 

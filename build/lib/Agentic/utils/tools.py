@@ -251,9 +251,7 @@ def send_project_emails(
     # ----------------------------
     # Load HTML template file
     # ----------------------------
-    # Get the directory where this file (tools.py) is located
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    template_path = os.path.join(current_dir, "meeting_email.html")
+    template_path = os.path.join("src", "utils", "meeting_email.html")
     with open(template_path, "r", encoding="utf-8") as f:
         template_html = f.read()
 

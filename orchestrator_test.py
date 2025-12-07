@@ -12,6 +12,7 @@ from src.Agentic.agents.Orchestrator import build_orchestrator_graph
 from src.Agentic.utils import save_summaries_to_mongo
 from src.Agentic.utils import fetch_project_data_from_mongo
 from src.Agentic.utils import send_project_emails
+from src.Agentic.utils import save_project_summary_to_mongo
 from src.Agentic.agents.Orchestrator import OrchestratorState
 
 # Agents
@@ -53,6 +54,7 @@ workflow = build_orchestrator_graph(
     global_agent,
     save_summaries_to_mongo,
     fetch_project_data_from_mongo,
+    save_project_summary_to_mongo,
     send_project_emails,
 )
 
@@ -67,12 +69,15 @@ client = MongoClient(mongo_uri,
 db = client["OMNI_MEET_DB"]
 collection = db["Raw_Transcripts"]
 
-doc = collection.find_one({"_id": ObjectId("6934ad0253aab1b5579695e2")})
+doc = collection.find_one({"_id": ObjectId("69353031feaf6eb6f8eb5575")})
 
 if not doc:
     raise ValueError("No transcript found for that ID")
 
 meeting = doc["meetings"][0]
+
+# Get the absolute path to the participants database file
+participant_db_path = os.path.join(os.path.dirname(__file__), "SampleData", "participants_database.csv")
 
 initial_state = OrchestratorState(
     transcript=meeting["Transcript"][0],
@@ -80,7 +85,7 @@ initial_state = OrchestratorState(
     project_name=doc["Project_name"],
     meeting_name=meeting["meeting_name"],
     participants=meeting["participants"],
-    participant_db_path=r"C:\Users\mohds\PycharmProjects\OrbitMeetAI\SampleData\participants_database.csv"
+    participant_db_path=participant_db_path
 )
 
 
