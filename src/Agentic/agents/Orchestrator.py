@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from loguru import logger
 
 # Import your schemas
-from src.utils.pydantic_schemas import SummaryList, UsersAnalysis
+from src.Agentic.utils.pydantic_schemas import SummaryList, UsersAnalysis
 
 # ======================================================================
 # LOGURU CONFIGURATION
@@ -169,8 +169,23 @@ async def run_global_summary(state: OrchestratorState, global_agent):
         raise
 
 
+async def save_project_summary_to_db(state: OrchestratorState, save_tool):
+    logger.info("Step 9: Saving Project Summary to MongoDB...")
+    try:
+        await save_tool.ainvoke({
+            "project_key": state.project_key,
+            "project_name": state.project_name,
+            "global_summary": state.global_summary
+        })
+        logger.success("Project Summary saved successfully.")
+        return state
+    except Exception as e:
+        logger.error(f"Error saving project summary: {e}")
+        raise
+
+
 async def send_emails(state: OrchestratorState, email_tool):
-    logger.info("Step 9: Sending Emails to participants & executives...")
+    logger.info("Step 10: Sending Emails to participants & executives...")
 
     meeting_text = "\n".join(state.summary_points)
 
@@ -213,6 +228,7 @@ def build_orchestrator_graph(
     global_summary_agent,
     save_tool,
     fetch_tool,
+    save_project_summary_tool,
     email_tool
 ):
     workflow = StateGraph(OrchestratorState)
@@ -226,6 +242,7 @@ def build_orchestrator_graph(
     workflow.add_node("save_participant", partial(save_participant_summary_to_db, save_tool=save_tool))
     workflow.add_node("fetch", partial(fetch_project_data, fetch_tool=fetch_tool))
     workflow.add_node("global_summary", partial(run_global_summary, global_agent=global_summary_agent))
+    workflow.add_node("save_project_summary", partial(save_project_summary_to_db, save_tool=save_project_summary_tool))
     workflow.add_node("email", partial(send_emails, email_tool=email_tool))
 
     workflow.add_edge("__start__", "summary")
@@ -237,7 +254,8 @@ def build_orchestrator_graph(
     workflow.add_edge("save_summary", "save_participant")
     workflow.add_edge("save_participant", "fetch")
     workflow.add_edge("fetch", "global_summary")
-    workflow.add_edge("global_summary", "email")
+    workflow.add_edge("global_summary", "save_project_summary")
+    workflow.add_edge("save_project_summary", "email")
     workflow.add_edge("email", END)
 
     return workflow.compile()

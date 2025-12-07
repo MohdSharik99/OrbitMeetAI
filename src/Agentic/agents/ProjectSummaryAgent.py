@@ -43,7 +43,7 @@ STYLE RULES:
 """
 
 
-class ProjectSummaryAgent:
+class ProjectSummaryAnalyst:
     def __init__(self, model, tools: List, system_prompt: str = PROJECT_SUMMARY_SYSTEM_PROMPT):
         self.model = model
 

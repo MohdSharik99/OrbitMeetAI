@@ -1,49 +1,43 @@
-from src.agents.ParticipantAnalystAgent import ParticipantSummaryAnalyst
-from src.agents.MeetingSummaryAgent import MeetingSummaryAnalyst
-from src.agents.ProjectSummaryAgent import ProjectSummaryAgent
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
-from langchain.messages import AIMessage, HumanMessage
 import os
-import asyncio
 
-
-transcript = """
-[00:00:02] John Doe
-Hi everyone, thanks for joining today's sync. We'll go over the project updates and blockers.
-
-[00:00:10] Sarah Smith
-Thanks John. I’ll start with my update. The API integration for the payment service is about 80% complete.
-I expect to finish the remaining tasks by Thursday.
-
-[00:00:25] John Doe
-Great. Any blockers?
-
-[00:00:27] Sarah Smith
-Yes, I’m waiting for access to the staging environment. I've already raised a ticket but haven't received approval yet.
-
-[00:00:40] Michael Lee
-I can help with that. I’ll follow up with DevOps and get the access approved today.
-
-[00:00:48] John Doe
-Perfect. Michael, your updates?
-
-[00:00:50] Michael Lee
-Sure. The UI redesign for the dashboard is complete. I’ve pushed it to the feature branch.
-Only pending item is final QA review scheduled for tomorrow.
-
-[00:01:05] John Doe
-Good progress. Before we wrap up, any announcements or concerns?
-
-[00:01:12] Sarah Smith
-None from my side.
-
-[00:01:14] Michael Lee
-All good here.
-
-[00:01:17] John Doe
-Alright, thanks everyone. We'll meet again next Monday. Have a great day!
-"""
+# transcript = """
+# [00:00:02] John Doe
+# Hi everyone, thanks for joining today's sync. We'll go over the project updates and blockers.
+#
+# [00:00:10] Sarah Smith
+# Thanks John. I’ll start with my update. The API integration for the payment service is about 80% complete.
+# I expect to finish the remaining tasks by Thursday.
+#
+# [00:00:25] John Doe
+# Great. Any blockers?
+#
+# [00:00:27] Sarah Smith
+# Yes, I’m waiting for access to the staging environment. I've already raised a ticket but haven't received approval yet.
+#
+# [00:00:40] Michael Lee
+# I can help with that. I’ll follow up with DevOps and get the access approved today.
+#
+# [00:00:48] John Doe
+# Perfect. Michael, your updates?
+#
+# [00:00:50] Michael Lee
+# Sure. The UI redesign for the dashboard is complete. I’ve pushed it to the feature branch.
+# Only pending item is final QA review scheduled for tomorrow.
+#
+# [00:01:05] John Doe
+# Good progress. Before we wrap up, any announcements or concerns?
+#
+# [00:01:12] Sarah Smith
+# None from my side.
+#
+# [00:01:14] Michael Lee
+# All good here.
+#
+# [00:01:17] John Doe
+# Alright, thanks everyone. We'll meet again next Monday. Have a great day!
+# """
 
 
 # --------------------------------------------------------------------------------------------
@@ -55,7 +49,7 @@ api_key = os.getenv("GROQ_API_KEY")
 
 llm = ChatGroq(
     model="openai/gpt-oss-20b",
-    temperature=0.7,
+    temperature=0.3,
     api_key=api_key
 )
 
@@ -190,4 +184,104 @@ llm = ChatGroq(
 #
 # print(project_result)
 #
+
+
+# ======================================================================================================
+# Testing add_transcript_to_mongo function if working to upload the transcript
+# =======================================================================================================
+
+# from src.utils.store_to_mongodb import extract_transcripts, process_transcript, add_transcript_to_mongo
 #
+#
+# transcript_path = r"C:\Users\mohds\PycharmProjects\OrbitMeetAI\SampleData\Transcripts\ProjectPhoenix.docx"
+#
+# transcript = extract_transcripts([transcript_path])
+# meta = process_transcript(transcript)
+# save_transcript = add_transcript_to_mongo(transcript_path)
+#
+# print(save_transcript)
+
+
+# =================================================================================================================
+# testing email connections
+# =================================================================================================================
+#
+# import os
+# import ssl
+# import smtplib
+# from email.mime.multipart import MIMEMultipart
+# from email.mime.text import MIMEText
+# from dotenv import load_dotenv
+#
+# load_dotenv()
+#
+# SMTP_SERVER = os.getenv("SMTP_SERVER")
+# SMTP_PORT = int(os.getenv("SMTP_PORT", 465))
+# SMTP_EMAIL = os.getenv("SMTP_EMAIL")
+# SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+#
+# def send_email_test():
+#     print("SMTP TEST STARTED")
+#     print(f"SERVER: {SMTP_SERVER}")
+#     print(f"PORT: {SMTP_PORT}")
+#     print(f"EMAIL: {SMTP_EMAIL}")
+#
+#     msg = MIMEMultipart("alternative")
+#     msg["From"] = SMTP_EMAIL
+#     msg["To"] = SMTP_EMAIL   # send to yourself
+#     msg["Subject"] = "SMTP Test Email"
+#
+#     msg.attach(MIMEText("<h2>This is a test email</h2>", "html"))
+#
+#     try:
+#         context = ssl.create_default_context()
+#         print("Connecting via SSL...")
+#
+#         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=context) as server:
+#             print("Connected! Logging in...")
+#             server.login(SMTP_EMAIL, SMTP_PASSWORD)
+#             print("Login successful! Sending email...")
+#             server.sendmail(SMTP_EMAIL, SMTP_EMAIL, msg.as_string())
+#
+#         print("Email sent.")
+#     except Exception as e:
+#         print("ERROR:", e)
+#
+# if __name__ == "__main__":
+#     send_email_test()
+
+# =================================================================================================
+# Test mongo client only
+# =================================================================================================
+
+import os
+from pymongo import MongoClient
+import certifi
+from dotenv import load_dotenv
+
+load_dotenv()
+
+MONGO_URI = os.getenv("MONGO_URI")
+
+def test_mongo():
+    print("\n=== MongoDB Connection Test ===")
+    print(f"Using URI: {MONGO_URI}\n")
+
+    try:
+        client = MongoClient(
+            MONGO_URI,
+            tls=True,
+            tlsCAFile=certifi.where()
+        )
+
+        # Trigger connection by listing databases
+        dbs = client.list_database_names()
+        print("✔ Connection successful!")
+        print("Databases:", dbs)
+
+    except Exception as e:
+        print("\n✘ Connection failed!")
+        print("Error:", e)
+
+if __name__ == "__main__":
+    test_mongo()

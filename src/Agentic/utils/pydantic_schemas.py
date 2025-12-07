@@ -17,7 +17,6 @@ class Participant(BaseModel):
 # SUMMARY POINTS SCHEMA
 class SummaryList(BaseModel):
     project_key: str
-    project_id: str
     project_name: str
     meeting_name: str
     participants: List[str]
@@ -35,7 +34,6 @@ class UserSummary(BaseModel):
 
 class UsersAnalysis(BaseModel):
     project_key: str
-    project_id: str
     meeting_name: str
     participant_summary: UserSummary
 

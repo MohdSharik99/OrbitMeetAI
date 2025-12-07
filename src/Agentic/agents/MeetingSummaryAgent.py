@@ -1,16 +1,8 @@
 from langchain.agents import create_agent
 from langchain.tools import BaseTool
 from langchain_core.messages import HumanMessage
-from typing import List, Optional
-import json
-import uuid
+from typing import List
 from langchain_core.output_parsers import JsonOutputParser
-
-from src.utils.pydantic_schemas import SummaryList
-
-
-
-
 
 SYSTEM_PROMPT = """
 You are a Meeting Analysis expert Agent for Leadership management.
@@ -24,7 +16,7 @@ GUIDELINES:
 2. When something is unclear or incomplete in the transcript, describe it as unclear.
 3. Keep all points factual, concise, and directly taken from what participants said.
 4. Preserve meaning without adding interpretations, assumptions, or conclusions.
-5. Avoid combining unrelated points unless the transcript clearly connects them.
+5. Each summary point should be in 120-150 characters.
 6. Use the speaker’s exact content as the only source for the summary.
 
 
