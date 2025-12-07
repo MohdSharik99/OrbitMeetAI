@@ -159,7 +159,7 @@ def add_transcript_to_mongo(transcript_path,
     for p in existing_projects:
         existing_key = p.get("Project_key", "")
         score = fuzz.ratio(project_key.lower(), existing_key.lower())
-        if score >= 90:
+        if score >= 85:
             matched_project_key = existing_key
             matched_project_id = p.get("_id")
             break

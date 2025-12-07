@@ -190,16 +190,16 @@ llm = ChatGroq(
 # Testing add_transcript_to_mongo function if working to upload the transcript
 # =======================================================================================================
 
-# from src.utils.store_to_mongodb import extract_transcripts, process_transcript, add_transcript_to_mongo
+from src.Agentic.utils.store_to_mongodb import extract_transcripts, process_transcript, add_transcript_to_mongo
 
 
-# transcript_path = r"C:\Users\mohds\PycharmProjects\OrbitMeetAI\SampleData\Transcripts\ProjectPhoenix.docx"
+transcript_path = r"C:\Users\mohds\PycharmProjects\OrbitMeetAI\SampleData\Transcripts\Q4_Revamp.docx"
 
-# transcript = extract_transcripts([transcript_path])
-# meta = process_transcript(transcript)
-# save_transcript = add_transcript_to_mongo(transcript_path)
+transcript = extract_transcripts([transcript_path])
+meta = process_transcript(transcript)
+save_transcript = add_transcript_to_mongo(transcript_path)
 
-# print(save_transcript)
+print(save_transcript)
 
 
 # =================================================================================================================

@@ -225,12 +225,11 @@ def fetch_project_data_from_mongo(
 # Email Sending Tool
 # =====================================================================================================
 @tool
-def send_project_emails(
-    input_data: Dict[str, Any],
-    participant_db_path: str = "participants_data.csv",
-) -> Dict[str, Any]:
+def send_project_emails(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Sends formatted OrbitMeetAI emails using `src/utils/meeting_email.html`.
+    Sends emails ONLY to actual meeting participants.
+    Executives get global summary section.
+    Non-exec participants get meeting + participant sections.
     """
 
     import os, csv, ssl, smtplib
@@ -238,9 +237,7 @@ def send_project_emails(
     from email.mime.text import MIMEText
     from datetime import datetime
 
-    # ----------------------------
-    # Extract data
-    # ----------------------------
+    # Required meeting data
     meeting_name = input_data["meeting_name"]
     project_name = input_data["project_name"]
 
@@ -248,230 +245,79 @@ def send_project_emails(
     participant_text = input_data["participant_analysis_text"]
     global_text = input_data["global_summary_text"]
 
-    # ----------------------------
-    # Load HTML template file
-    # ----------------------------
-    # Get the directory where this file (tools.py) is located
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    template_path = os.path.join(current_dir, "meeting_email.html")
-    with open(template_path, "r", encoding="utf-8") as f:
-        template_html = f.read()
+    # IMPORTANT: this MUST exist now
+    meeting_participants = {p.lower().strip() for p in input_data.get("participants", [])}
 
-    # ----------------------------
-    # Convert text → HTML bullets (for meeting summary)
-    # ----------------------------
+    # Load our CSV participants
+    participant_db_path = input_data.get("participant_db_path", "SampleData/participants_database.csv")
+    real_people = []
+    with open(participant_db_path, "r", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            # name match using lowercase
+            if row["EmployeeName"].lower().strip() in meeting_participants:
+                real_people.append({
+                    "name": row["EmployeeName"],
+                    "email": row["EmployeeEmail"],
+                    "role": row["Role"].lower().strip()
+                })
+
+    EXEC_ROLES = {
+        "manager", "senior manager", "director", "vp", "vice president",
+        "chief", "head", "lead"
+    }
+
+    # Email formatting helpers
     def to_bullets(text: str) -> str:
-        items = [
-            f"<li>{line.strip()}</li>"
-            for line in text.split("\n")
-            if line.strip()
-        ]
+        items = [f"<li>{l.strip()}</li>" for l in text.split("\n") if l.strip()]
         return "<ul>" + "".join(items) + "</ul>"
-    
-    # ----------------------------
-    # Format participant analysis as structured cards
-    # ----------------------------
-    def format_participant_analysis(participant_text: str) -> str:
-        """
-        Formats participant analysis text into structured HTML cards.
-        Expected format: "Name | Updates: ... Roadblocks: ... Actionable: ..."
-        """
-        if not participant_text.strip():
-            return ""
-        
-        cards = []
-        # Split by participant (assuming each line is a participant)
-        for line in participant_text.split("\n"):
-            if not line.strip() or " | " not in line:
-                continue
-            
-            # Parse the line: "Name | Updates: ... Roadblocks: ... Actionable: ..."
-            parts = line.split(" | ", 1)
-            if len(parts) < 2:
-                continue
-            
-            participant_name = parts[0].strip()
-            rest = parts[1].strip()
-            
-            # Extract Updates, Roadblocks, Actionable using regex for better parsing
-            import re
-            
-            updates = []
-            roadblocks = []
-            actionable = []
-            
-            # Extract Updates
-            updates_match = re.search(r'Updates:\s*(.+?)(?:\s+Roadblocks:|$)', rest, re.IGNORECASE)
-            if updates_match:
-                updates_str = updates_match.group(1).strip()
-                updates = [u.strip() for u in updates_str.split(",") if u.strip()]
-            
-            # Extract Roadblocks
-            roadblocks_match = re.search(r'Roadblocks:\s*(.+?)(?:\s+Actionable:|$)', rest, re.IGNORECASE)
-            if roadblocks_match:
-                roadblocks_str = roadblocks_match.group(1).strip()
-                roadblocks = [r.strip() for r in roadblocks_str.split(",") if r.strip()]
-            
-            # Extract Actionable
-            actionable_match = re.search(r'Actionable:\s*(.+?)$', rest, re.IGNORECASE)
-            if actionable_match:
-                actionable_str = actionable_match.group(1).strip()
-                actionable = [a.strip() for a in actionable_str.split(",") if a.strip()]
-            
-            # Skip if no data found
-            if not (updates or roadblocks or actionable):
-                continue
-            
-            # Build participant card HTML
-            card_html = f"""
-            <div class="participant-card">
-                <div class="participant-name">{participant_name}</div>
-            """
-            
-            if updates:
-                card_html += f"""
-                <div class="participant-section">
-                    <div class="participant-section-label">📊 Key Updates</div>
-                    <div class="participant-section-content">
-                        <ul>
-                            {''.join([f'<li>{update}</li>' for update in updates])}
-                        </ul>
-                    </div>
-                </div>
-                """
-            
-            if roadblocks:
-                card_html += f"""
-                <div class="participant-section">
-                    <div class="participant-section-label">⚠️ Roadblocks</div>
-                    <div class="participant-section-content">
-                        <ul>
-                            {''.join([f'<li>{roadblock}</li>' for roadblock in roadblocks])}
-                        </ul>
-                    </div>
-                </div>
-                """
-            
-            if actionable:
-                card_html += f"""
-                <div class="participant-section">
-                    <div class="participant-section-label">✅ Action Items</div>
-                    <div class="participant-section-content">
-                        <ul>
-                            {''.join([f'<li>{action}</li>' for action in actionable])}
-                        </ul>
-                    </div>
-                </div>
-                """
-            
-            card_html += "</div>"
-            cards.append(card_html)
-        
-        if not cards:
-            return ""
-        
-        return f"""
-        <div class="section">
-            <h2 class="section-title">👥 Participant Analysis</h2>
-            {''.join(cards)}
-        </div>
-        """
-    
-    # ----------------------------
-    # Format global summary (for executives)
-    # ----------------------------
-    def format_global_summary(global_text: str) -> str:
-        """Formats global summary with proper HTML structure"""
+
+    def format_global_summary(global_text: str):
         if not global_text.strip():
             return ""
-        
-        # Preserve line breaks and format
-        formatted = global_text.strip().replace("\n\n", "\n")
-        
         return f"""
-        <div class="section">
-            <h2 class="section-title">📊 Executive Project Summary</h2>
-            <div class="executive-summary">
-                <div class="section-content">{formatted}</div>
-            </div>
-        </div>
+        <div><h2>Executive Summary</h2>
+        <div>{global_text}</div></div>
         """
+
+    def format_participant_summary(text: str):
+        if not text.strip():
+            return ""
+        return f"<div><h2>Participant Highlights</h2><div>{text}</div></div>"
 
     meeting_html = to_bullets(meeting_text)
 
-    # ----------------------------
-    # Load participants
-    # ----------------------------
-    participants = []
-    with open(participant_db_path, "r", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            participants.append({
-                "name": row["EmployeeName"],
-                "email": row["EmployeeEmail"],
-                "role": row["Role"].lower().strip()
-            })
-
-    EXEC_ROLES = {
-        "manager", "senior manager", "director",
-        "vp", "vice president", "chief",
-        "head", "lead"
-    }
-
-    # ----------------------------
-    # SMTP (SSL)
-    # ----------------------------
+    # SMTP
     SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     SMTP_PORT = int(os.getenv("SMTP_PORT", 465))
     SMTP_EMAIL = os.getenv("SMTP_EMAIL")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
     context = ssl.create_default_context()
-
-    sent = {"participants": [], "executives": []}
+    sent = []
 
     with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=context) as smtp:
         smtp.login(SMTP_EMAIL, SMTP_PASSWORD)
 
-        def send_formatted(to_email: str, html: str):
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = f"Meeting Summary: {meeting_name} | {project_name}"
-            msg["From"] = f"OrbitMeetAI <{SMTP_EMAIL}>"
-            msg["To"] = to_email
-            msg["Reply-To"] = SMTP_EMAIL  # Set reply-to to avoid no-reply issues
-            msg.attach(MIMEText(html, "html"))
-            smtp.sendmail(SMTP_EMAIL, to_email, msg.as_string())
-
-        for p in participants:
-            name = p["name"]
-            email = p["email"]
+        for p in real_people:
             is_exec = p["role"] in EXEC_ROLES
 
-            # Insert dynamic blocks
-            participant_section = ""
-            executive_section = ""
-
+            body = meeting_html
             if is_exec:
-                executive_section = format_global_summary(global_text)
-                sent["executives"].append(email)
+                body += format_global_summary(global_text)
             else:
-                participant_section = format_participant_analysis(participant_text)
-                sent["participants"].append(email)
+                body += format_participant_summary(participant_text)
 
-            # Build final email body
-            html_body = template_html\
-                .replace("{{receiver_name}}", name)\
-                .replace("{{subject}}", meeting_name)\
-                .replace("{{project_name}}", project_name)\
-                .replace("{{meeting_summary}}", meeting_html)\
-                .replace("{{participant_section}}", participant_section)\
-                .replace("{{executive_section}}", executive_section)\
-                .replace("{{year}}", str(datetime.now().year))
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = f"Meeting Summary: {meeting_name}"
+            msg["From"] = SMTP_EMAIL
+            msg["To"] = p["email"]
+            msg.attach(MIMEText(body, "html"))
 
-            send_formatted(email, html_body)
+            smtp.sendmail(SMTP_EMAIL, p["email"], msg.as_string())
+            sent.append({"email": p["email"], "role": p["role"]})
 
     return {
         "status": "success",
         "meeting_name": meeting_name,
-        "sent_to_participants": sent["participants"],
-        "sent_to_executives": sent["executives"]
+        "sent": sent
     }

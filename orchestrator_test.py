@@ -2,56 +2,17 @@ import os
 import asyncio
 from pymongo import MongoClient
 from bson import ObjectId
-
-from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 import certifi
 
-# Orchestrator + Tools
-from src.Agentic.agents.Orchestrator import build_orchestrator_graph
-from src.Agentic.utils import save_summaries_to_mongo
-from src.Agentic.utils import fetch_project_data_from_mongo
-from src.Agentic.utils import send_project_emails
-from src.Agentic.utils import save_project_summary_to_mongo
-from src.Agentic.agents.Orchestrator import OrchestratorState
+from langchain_groq import ChatGroq
 
-# Agents
+from src.Agentic.agents.Orchestrator import build_orchestrator_graph, OrchestratorState
 from src.Agentic.agents.MeetingSummaryAgent import MeetingSummaryAnalyst
 from src.Agentic.agents.ParticipantAnalystAgent import ParticipantSummaryAnalyst
 from src.Agentic.agents.ProjectSummaryAgent import ProjectSummaryAnalyst
 
-
-# -----------------------------------
-# Load environment variables
-# -----------------------------------
-load_dotenv()
-api_key = os.getenv("GROQ_API_KEY")
-mongo_uri = os.getenv("MONGO_URI")
-
-
-
-
-# -----------------------------------
-# Initialize LLM
-# -----------------------------------
-llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0.2,
-    api_key=api_key
-)
-
-
-# -----------------------------------
-# Build Orchestrator Graph
-# -----------------------------------
-summary_agent = MeetingSummaryAnalyst(model=llm, tools=[])
-participant_agent = ParticipantSummaryAnalyst(model=llm, tools=[])
-global_agent = ProjectSummaryAnalyst(model=llm, tools=[])
-
-workflow = build_orchestrator_graph(
-    summary_agent,
-    participant_agent,
-    global_agent,
+from src.Agentic.utils import (
     save_summaries_to_mongo,
     fetch_project_data_from_mongo,
     save_project_summary_to_mongo,
@@ -59,53 +20,88 @@ workflow = build_orchestrator_graph(
 )
 
 
-# -----------------------------------
-# Fetch transcript from Mongo
-# -----------------------------------
-client = MongoClient(mongo_uri,
-                     tls=True,
-                     tlsCAFile=certifi.where())
+load_dotenv()
+api_key = os.getenv("GROQ_API_KEY")
+mongo_uri = os.getenv("MONGO_URI")
 
+client = MongoClient(mongo_uri, tls=True, tlsCAFile=certifi.where())
 db = client["OMNI_MEET_DB"]
 collection = db["Raw_Transcripts"]
 
-doc = collection.find_one({"_id": ObjectId("69353031feaf6eb6f8eb5575")})
+DOC_ID = "6935c818994314ea5158fbb7"   # your real document id
 
-if not doc:
-    raise ValueError("No transcript found for that ID")
 
-meeting = doc["meetings"][0]
+llm = ChatGroq(
+    model="openai/gpt-oss-20b",
+    temperature=0.2,
+    api_key=api_key,
+)
 
-# Get the absolute path to the participants database file
-participant_db_path = os.path.join(os.path.dirname(__file__), "SampleData", "participants_database.csv")
-
-initial_state = OrchestratorState(
-    transcript=meeting["Transcript"][0],
-    project_key=doc["Project_key"],
-    project_name=doc["Project_name"],
-    meeting_name=meeting["meeting_name"],
-    participants=meeting["participants"],
-    participant_db_path=participant_db_path
+workflow = build_orchestrator_graph(
+    MeetingSummaryAnalyst(model=llm, tools=[]),
+    ParticipantSummaryAnalyst(model=llm, tools=[]),
+    ProjectSummaryAnalyst(model=llm, tools=[]),
+    save_summaries_to_mongo,
+    fetch_project_data_from_mongo,
+    save_project_summary_to_mongo,
+    send_project_emails,
 )
 
 
+async def run_all():
 
-# -----------------------------------
-# Run the orchestrator async
-# -----------------------------------
-final_state = asyncio.run(workflow.ainvoke(initial_state))
+    # ALWAYS fetch latest
+    doc = collection.find_one({"_id": ObjectId(DOC_ID)})
+
+    for meeting in doc["meetings"]:
+
+        name = meeting["meeting_name"]
+        already = meeting.get("processed", False)
+
+        print()
+        print("------------------------------------------------")
+        print("Processing:", name, "processed=", already)
+
+        if already:
+            print("Skipping already processed.")
+            continue
+
+        transcript = meeting["Transcript"][0]
+
+        participant_db_path = os.path.join(
+            os.path.dirname(__file__),
+            "SampleData",
+            "participants_database.csv",
+        )
+
+        state = OrchestratorState(
+            transcript=transcript,
+            project_key=doc["Project_key"],
+            project_name=doc["Project_name"],
+            meeting_name=name,
+            participants=meeting["participants"],
+            participant_db_path=participant_db_path,
+        )
+
+        result = await workflow.ainvoke(state)
+        print("Done running orchestrator.")
+
+        # update flag
+        upd = collection.update_one(
+            {"_id": doc["_id"], "meetings.meeting_name": name},
+            {"$set": {"meetings.$.processed": True}}
+        )
+        print("Mongo modified:", upd.modified_count)
+
+        # VERY IMPORTANT: re-fetch so next loop sees updates
+        doc = collection.find_one({"_id": ObjectId(DOC_ID)})
 
 
-# -----------------------------------
-# Output results
-# -----------------------------------
-print("============ GLOBAL SUMMARY ============")
-print(final_state["global_summary"])
+    print("\n========== FINAL DB CHECK ==========")
+    latest = collection.find_one({"_id": ObjectId(DOC_ID)})
+    for m in latest["meetings"]:
+        print(m["meeting_name"], "processed=", m.get("processed", False))
 
 
-
-
-print("\n============ PROJECT DATA ============")
-print(final_state["project_data"])
-
-print("\n============ EMAILS SENT SUCCESSFULLY ============")
+if __name__ == "__main__":
+    asyncio.run(run_all())

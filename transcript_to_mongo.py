@@ -1,7 +1,8 @@
 """
 Scheduler for automatically uploading new transcripts from SampleData/Transcripts to MongoDB.
-Runs every hour to check for new transcript files and upload them to OrbitMeetDB.raw_transcripts.
+Runs every hour to check for new transcript files and upload them to OMNI_MEET_DB.Raw_Transcripts.
 """
+
 import os
 import asyncio
 from pathlib import Path
@@ -14,361 +15,240 @@ from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 from dotenv import load_dotenv
 
-# Import helper functions
-from src.Agentic.utils.store_to_mongodb import add_transcript_to_mongo, extract_transcripts, process_transcript
+# helper functions
+from src.Agentic.utils.store_to_mongodb import (
+    add_transcript_to_mongo,
+    extract_transcripts,
+    process_transcript,
+)
 
 load_dotenv()
 
+
 # ======================================================================
-# LOGGER CONFIGURATION
+# LOGGER CONFIG
 # ======================================================================
-logger.remove()  # remove default
+logger.remove()
 logger.add(
     sink=lambda msg: print(msg, end=""),
     colorize=True,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
-           "<level>{level}</level> | "
-           "<cyan>{message}</cyan>"
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <cyan>{message}</cyan>"
 )
 
+
 # ======================================================================
-# GLOBAL STATE
+# GLOBAL
 # ======================================================================
 scheduler: AsyncIOScheduler = None
 mongo_uri = os.getenv("MONGO_URI")
 transcripts_dir = Path("SampleData/Transcripts")
-processed_files: Set[str] = set()  # Track processed files by their absolute path
+processed_files: Set[str] = set()
 
-# Supported file extensions
 SUPPORTED_EXTENSIONS = {".txt", ".docx", ".pdf"}
 
 
 # ======================================================================
-# LOAD PROCESSED FILES FROM MONGODB
+# LOAD processed filenames from DB
 # ======================================================================
 def load_processed_files_from_db() -> Set[str]:
-    """
-    Load list of already processed files from MongoDB by checking existing project_keys.
-    This helps avoid re-processing files that were already uploaded.
-    
-    Returns:
-        Set of file paths that have been processed
-    """
+    processed = set()
     if not mongo_uri:
-        logger.warning("MONGO_URI not configured. Cannot load processed files from DB.")
-        return set()
-    
-    try:
-        client = MongoClient(mongo_uri, tls=True, tlsCAFile=certifi.where())
-        db = client["OMNI_MEET_DB"]
-        collection = db["Raw_Transcripts"]
-        
-        # Get all existing project keys
-        existing_projects = list(collection.find({}, {"Project_key": 1, "meetings.meeting_name": 1}))
-        
-        # We can't directly map files to project_keys, so we'll track by file name
-        # This is a simple approach - in production you might want to store file metadata
-        processed = set()
-        
-        logger.info(f"Loaded {len(existing_projects)} existing projects from database")
         return processed
-    
-    except Exception as e:
-        logger.error(f"Error loading processed files from DB: {e}")
-        return set()
 
-
-# ======================================================================
-# CHECK IF PROJECT KEY EXISTS IN MONGODB
-# ======================================================================
-def project_key_exists(project_key: str) -> bool:
-    """
-    Check if a project_key already exists in MongoDB.
-    
-    Args:
-        project_key: The project key to check
-        
-    Returns:
-        True if project_key exists, False otherwise
-    """
-    if not mongo_uri:
-        logger.warning("MONGO_URI not configured. Cannot check project key.")
-        return False
-    
     try:
         client = MongoClient(mongo_uri, tls=True, tlsCAFile=certifi.where())
         db = client["OMNI_MEET_DB"]
         collection = db["Raw_Transcripts"]
-        
-        # Check for exact match first
-        existing = collection.find_one({"Project_key": project_key})
-        if existing:
-            return True
-        
-        # Also check for fuzzy matches (similar to add_transcript_to_mongo logic)
-        from rapidfuzz import fuzz
-        all_projects = list(collection.find({}, {"Project_key": 1}))
-        
-        for project in all_projects:
-            existing_key = project.get("Project_key", "")
-            score = fuzz.ratio(project_key.lower(), existing_key.lower())
-            if score >= 90:  # 90% similarity threshold
-                return True
-        
-        return False
-    
+
+        for doc in collection.find({}, {"source_files": 1}):
+            for fname in doc.get("source_files", []):
+                processed.add(fname)
+
+        logger.info(f"Loaded {len(processed)} processed filenames from DB")
+        return processed
+
     except Exception as e:
-        logger.error(f"Error checking project key existence: {e}")
-        return False
+        logger.error(f"Error loading processed files: {e}")
+        return processed
 
 
 # ======================================================================
-# GET PROJECT KEY FROM TRANSCRIPT FILE
+# EXTRACT project key from a transcript
 # ======================================================================
 def get_project_key_from_file(file_path: Path) -> str:
-    """
-    Extract project key from a transcript file without uploading it.
-    
-    Args:
-        file_path: Path to the transcript file
-        
-    Returns:
-        Project key string, or None if extraction fails
-    """
     try:
-        # Use helper function to extract transcript
         transcript = extract_transcripts([str(file_path)])
-        
-        # Process transcript to get metadata
         meta = process_transcript(transcript)
-        
         return meta.get("Project_key", "").strip()
-    
+
     except Exception as e:
         logger.error(f"Error extracting project key from {file_path}: {e}")
         return None
 
 
 # ======================================================================
-# SCAN FOR NEW TRANSCRIPT FILES
+# Scan for new transcription files
 # ======================================================================
 def scan_for_new_transcripts() -> List[Path]:
-    """
-    Scan the transcripts directory for new transcript files.
-    
-    Returns:
-        List of Path objects for new transcript files
-    """
     if not transcripts_dir.exists():
         logger.warning(f"Transcripts directory does not exist: {transcripts_dir}")
         return []
-    
+
     new_files = []
-    
-    # Get all supported files in the directory
     for file_path in transcripts_dir.iterdir():
         if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
-            # Check if file has been processed
-            abs_path = str(file_path.resolve())
-            if abs_path not in processed_files:
+            if file_path.name not in processed_files:
                 new_files.append(file_path)
-    
+
     return new_files
 
 
 # ======================================================================
-# UPLOAD TRANSCRIPT TO MONGODB
+# Upload a transcript (append if project exists)
 # ======================================================================
 def upload_transcript(file_path: Path) -> bool:
-    """
-    Upload a single transcript file to MongoDB.
-    
-    Args:
-        file_path: Path to the transcript file
-        
-    Returns:
-        True if upload was successful, False otherwise
-    """
-    abs_path = str(file_path.resolve())
-    
+    filename = file_path.name
+
     try:
-        logger.info(f"Processing transcript file: {file_path.name}")
-        
-        # First, check if project_key already exists
+        logger.info(f"Processing transcript file: {filename}")
+
         project_key = get_project_key_from_file(file_path)
-        
         if not project_key:
-            logger.warning(f"Could not extract project key from {file_path.name}. Skipping.")
+            logger.warning(f"Cannot extract project key from {filename}")
             return False
-        
-        # Check if project_key already exists in MongoDB
-        if project_key_exists(project_key):
-            logger.info(f"Project key '{project_key}' already exists in database. Skipping {file_path.name}.")
-            # Mark as processed even though we didn't upload (to avoid re-checking)
-            processed_files.add(abs_path)
-            return True
-        
-        # Upload transcript using the existing function
+
+        # always call add_transcript_to_mongo so it can append meetings
         result = add_transcript_to_mongo(str(file_path), mongo_uri)
-        
+
+        # mark processed regardless of append or exists
+        processed_files.add(filename)
+
+        # store filename in DB
+        try:
+            client = MongoClient(mongo_uri, tls=True, tlsCAFile=certifi.where())
+            db = client["OMNI_MEET_DB"]
+            db["Raw_Transcripts"].update_one(
+                {"Project_key": project_key},
+                {"$addToSet": {"source_files": filename}}
+            )
+        except Exception as e:
+            logger.warning(f"Could not store filename in DB: {e}")
+
         if result and "already exists" not in result.lower():
-            logger.success(f"Successfully uploaded {file_path.name}: {result}")
-            processed_files.add(abs_path)
-            return True
-        elif "already exists" in result.lower():
-            logger.info(f"Transcript already exists: {file_path.name}")
-            processed_files.add(abs_path)
-            return True
+            logger.success(f"Uploaded {filename}: {result}")
         else:
-            logger.error(f"Failed to upload {file_path.name}: {result}")
-            return False
-    
+            logger.info(f"Transcript existed or appended: {filename}")
+
+        return True
+
     except Exception as e:
-        logger.error(f"Error uploading transcript {file_path.name}: {e}")
+        logger.error(f"Error uploading transcript {filename}: {e}")
         return False
 
 
 # ======================================================================
-# SCHEDULED JOB: CHECK AND UPLOAD NEW TRANSCRIPTS
+# Scheduled job
 # ======================================================================
 async def check_and_upload_transcripts():
-    """
-    Scheduled job that runs every hour to check for new transcripts and upload them.
-    """
     logger.info("=" * 60)
-    logger.info(f"Scheduled job started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"Scheduled job started at {datetime.now():%Y-%m-%d %H:%M:%S}")
     logger.info("=" * 60)
-    
-    # Scan for new transcript files
+
     new_files = scan_for_new_transcripts()
-    
     if not new_files:
-        logger.info("No new transcript files found. Skipping.")
+        logger.info("No new transcript files found.")
         return
-    
-    logger.info(f"Found {len(new_files)} new transcript file(s) to process...")
-    
-    # Upload each new file
+
+    logger.info(f"Found {len(new_files)} new file(s) to process")
+
     success_count = 0
     failure_count = 0
-    skipped_count = 0
-    
+
     for file_path in new_files:
-        result = upload_transcript(file_path)
-        if result:
+        ok = upload_transcript(file_path)
+        if ok:
             success_count += 1
         else:
             failure_count += 1
-    
-    logger.info("=" * 60)
-    logger.info(f"Job completed: {success_count} succeeded, {failure_count} failed")
+
+    logger.info(f"Completed. success={success_count}, fail={failure_count}")
     logger.info("=" * 60)
 
 
 # ======================================================================
-# INITIALIZE PROCESSED FILES
+# Initialize processed files
 # ======================================================================
 def initialize_processed_files():
-    """
-    Initialize the set of processed files by scanning the directory
-    and checking against MongoDB.
-    """
     global processed_files
-    
-    logger.info("Initializing processed files tracking...")
-    
-    # Load from database
-    db_processed = load_processed_files_from_db()
-    processed_files.update(db_processed)
-    
-    # Also scan directory and check each file against MongoDB
-    if transcripts_dir.exists():
-        for file_path in transcripts_dir.iterdir():
-            if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
-                project_key = get_project_key_from_file(file_path)
-                if project_key and project_key_exists(project_key):
-                    abs_path = str(file_path.resolve())
-                    processed_files.add(abs_path)
-                    logger.debug(f"Marked as processed (exists in DB): {file_path.name}")
-    
-    logger.info(f"Initialized {len(processed_files)} processed files")
+
+    logger.info("Initializing processed files...")
+
+    # load from DB
+    processed_files.update(load_processed_files_from_db())
+
+    logger.info(f"Loaded {len(processed_files)} processed files")
 
 
 # ======================================================================
-# SCHEDULER SETUP
+# Scheduler control
 # ======================================================================
 def start_scheduler():
-    """Start the background scheduler"""
     global scheduler
-    
+
     if scheduler is not None:
-        logger.warning("Scheduler is already running")
+        logger.warning("Scheduler already running")
         return
-    
+
     logger.info("Starting transcript upload scheduler...")
-    
-    # Initialize processed files tracking
     initialize_processed_files()
-    
-    # Create scheduler
+
     scheduler = AsyncIOScheduler()
-    
-    # Schedule job to run every hour
     scheduler.add_job(
         check_and_upload_transcripts,
-        trigger=CronTrigger(minute=0),  # Run at the start of every hour
+        trigger=CronTrigger(minute=0),
         id="upload_transcripts",
-        name="Upload new transcripts to MongoDB",
         replace_existing=True
     )
-    
-    # Start scheduler
     scheduler.start()
-    logger.success("Background scheduler started. Will check for new transcripts every hour.")
-    logger.info(f"Monitoring directory: {transcripts_dir.absolute()}")
+
+    logger.success("Background transcript scheduler started.")
 
 
 def stop_scheduler():
-    """Stop the background scheduler"""
     global scheduler
-    
+
     if scheduler is None:
         return
-    
+
     logger.info("Stopping transcript upload scheduler...")
     scheduler.shutdown()
     scheduler = None
-    logger.success("Background scheduler stopped")
+    logger.success("Transcript scheduler stopped")
 
 
 # ======================================================================
-# MANUAL TRIGGER (for testing)
+# Manual trigger (testing)
 # ======================================================================
 async def run_manual_check():
-    """Manually trigger check and upload of new transcripts (for testing)"""
     logger.info("Manual check triggered")
     await check_and_upload_transcripts()
 
 
 # ======================================================================
-# MAIN ENTRY POINT
+# Entry point
 # ======================================================================
 if __name__ == "__main__":
-    # For standalone execution
     logger.info("Starting transcript upload scheduler as standalone service...")
-    
-    # Initialize processed files
+
     initialize_processed_files()
-    
-    # Start scheduler
-    start_scheduler()
-    
-    try:
-        # Keep the script running
-        # AsyncIOScheduler runs in the background, so we just need to keep the main thread alive
-        import time
+
+    async def main():
+        start_scheduler()
         while True:
-            time.sleep(1)
+            await asyncio.sleep(1)
+
+    try:
+        asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Shutting down...")
+        logger.info("Shutting down scheduler...")
         stop_scheduler()

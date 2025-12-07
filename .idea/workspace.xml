@@ -4,7 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="01ddcff9-bf4a-4976-92c5-cf74fba1e240" name="Changes" comment="Cleaned project structure" />
+    <list default="true" id="01ddcff9-bf4a-4976-92c5-cf74fba1e240" name="Changes" comment="Cleaned project structure">
+      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/orchestrator_test.py" beforeDir="false" afterPath="$PROJECT_DIR$/orchestrator_test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sampleAgent.py" beforeDir="false" afterPath="$PROJECT_DIR$/sampleAgent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Agentic/utils/store_to_mongodb.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/Agentic/utils/store_to_mongodb.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Agentic/utils/tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/Agentic/utils/tools.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/scheduler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/transcript_to_mongo.py" beforeDir="false" afterPath="$PROJECT_DIR$/transcript_to_mongo.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -67,6 +76,8 @@
     "Python.audio_to_diarization_tool.executor": "Run",
     "Python.orchestrator_test.executor": "Run",
     "Python.sampleAgent.executor": "Run",
+    "Python.scheduler.executor": "Run",
+    "Python.store_to_mongodb.executor": "Run",
     "Python.test.executor": "Run",
     "Python.transcript_to_mongo.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
@@ -83,7 +94,7 @@
       <recent name="C:\Users\mohds\PycharmProjects\OrbitMeetAI\ArchiveFiles" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.transcript_to_mongo">
+  <component name="RunManager" selected="Python.orchestrator_test">
     <configuration name="orchestrator_test" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="OrbitMeetAI" />
       <option name="ENV_FILES" value="" />
@@ -98,6 +109,72 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/orchestrator_test.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="sampleAgent" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="OrbitMeetAI" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/sampleAgent.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="scheduler" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="OrbitMeetAI" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src/backend" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/backend/scheduler.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="store_to_mongodb" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="OrbitMeetAI" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src/Agentic/utils" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/Agentic/utils/store_to_mongodb.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -130,8 +207,11 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.transcript_to_mongo" />
         <item itemvalue="Python.orchestrator_test" />
+        <item itemvalue="Python.scheduler" />
+        <item itemvalue="Python.store_to_mongodb" />
+        <item itemvalue="Python.transcript_to_mongo" />
+        <item itemvalue="Python.sampleAgent" />
       </list>
     </recent_temporary>
   </component>
