@@ -135,8 +135,7 @@ def build_chatbot_chain() -> Any:
     prompt = ChatPromptTemplate.from_template("""
 You are a helpful AI assistant for meeting analysis. You must answer ONLY from the document content given below.
 
-If the answer is not found in the document, reply EXACTLY:
-"I don't know based on the document."
+If you are not sure what to answer, then apologize and ask for clarification. Say "I don't know based on the document."
 
 Document:
 {document}

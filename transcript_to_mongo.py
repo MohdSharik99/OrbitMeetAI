@@ -365,7 +365,10 @@ if __name__ == "__main__":
     
     try:
         # Keep the script running
-        asyncio.get_event_loop().run_forever()
+        # AsyncIOScheduler runs in the background, so we just need to keep the main thread alive
+        import time
+        while True:
+            time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         stop_scheduler()

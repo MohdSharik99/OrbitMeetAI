@@ -67,6 +67,19 @@ const SearchableSelect = ({
     }
   }) : [];
 
+  // Debug: Log options when dropdown opens
+  useEffect(() => {
+    if (isOpen) {
+      console.log('SearchableSelect dropdown opened');
+      console.log('Options count:', options.length);
+      console.log('Filtered options count:', filteredOptions.length);
+      console.log('Search term:', searchTerm);
+      if (options.length > 0) {
+        console.log('First option:', options[0]);
+      }
+    }
+  }, [isOpen, options, filteredOptions, searchTerm]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -144,9 +157,9 @@ const SearchableSelect = ({
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <div
-        className={`w-full px-4 py-3 border-2 ${selectBorder} rounded-xl focus-within:ring-2 focus-within:ring-[#B56727] focus-within:border-[#B56727] ${selectBg} ${textColor} shadow-sm transition-all font-semibold text-base ${
+        className={`w-full px-2 py-1 border ${selectBorder} rounded focus-within:ring-1 focus-within:ring-[#B56727] focus-within:border-[#B56727] ${selectBg} ${textColor} shadow-sm transition-all font-bold text-xs ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-        } ${isOpen ? 'ring-2 ring-[#B56727] border-[#B56727]' : ''}`}
+        } ${isOpen ? 'ring-1 ring-[#B56727] border-[#B56727]' : ''}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
         <div className="flex items-center justify-between">
@@ -159,11 +172,11 @@ const SearchableSelect = ({
             onKeyDown={handleKeyDown}
             placeholder={isOpen ? 'Type to search...' : placeholder}
             disabled={disabled}
-            className={`flex-1 bg-transparent border-none outline-none ${textColor} placeholder-gray-400`}
+            className={`flex-1 bg-transparent border-none outline-none ${textColor} placeholder-gray-400 text-xs`}
             readOnly={!isOpen}
           />
           <svg
-            className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -174,7 +187,7 @@ const SearchableSelect = ({
       </div>
 
       {isOpen && !disabled && (
-        <div className={`absolute z-50 w-full mt-2 ${selectBg} border-2 ${selectBorder} rounded-xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar`}>
+        <div className={`absolute z-[9999] w-full mt-1 ${selectBg} border ${selectBorder} rounded shadow-2xl max-h-60 overflow-y-auto custom-scrollbar`}>
           {filteredOptions.length > 0 ? (
             <ul className="py-2">
               {filteredOptions.map((option, index) => {
@@ -188,7 +201,7 @@ const SearchableSelect = ({
                     <li
                       key={optionValue || index}
                       onClick={() => handleSelect(option)}
-                      className={`px-4 py-3 cursor-pointer transition-colors ${
+                      className={`px-2 py-1.5 cursor-pointer transition-colors text-xs ${
                         isSelected
                           ? 'bg-[#B56727] text-white'
                           : isHighlighted
@@ -198,9 +211,9 @@ const SearchableSelect = ({
                       onMouseEnter={() => setHighlightedIndex(index)}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-medium">{optionLabel}</span>
+                        <span className="font-bold truncate">{optionLabel}</span>
                         {isSelected && (
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <svg className="w-4 h-4 flex-shrink-0 ml-2" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                         )}
@@ -214,7 +227,7 @@ const SearchableSelect = ({
               })}
             </ul>
           ) : (
-            <div className={`px-4 py-8 text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+            <div className={`px-2 py-4 text-center text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
               No options found
             </div>
           )}

@@ -17,13 +17,19 @@ function App() {
 
   const [projectKey, setProjectKey] = useState('');
 
-  // Resizable chatbot width state (default 33.33% = 4/12 columns)
+  // Collapsible chatbot width state (default 20%)
   const [chatbotWidth, setChatbotWidth] = useState(() => {
     const saved = localStorage.getItem('chatbotWidth');
-    return saved ? parseFloat(saved) : 33.33;
+    return saved ? parseFloat(saved) : 20;
   });
-  const [isResizing, setIsResizing] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const [isChatbotVisible, setIsChatbotVisible] = useState(() => {
+    const saved = localStorage.getItem('chatbotVisible');
+    return saved ? saved === 'true' : true; // Default to visible
+  });
+  const [isAnalysisCollapsed, setIsAnalysisCollapsed] = useState(false);
+  const [isChatbotCollapsed, setIsChatbotCollapsed] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const resizeRef = useRef(null);
 
   // Track window size for responsive behavior
@@ -35,12 +41,35 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Save width to localStorage
+  // Save width and visibility to localStorage
   useEffect(() => {
     localStorage.setItem('chatbotWidth', chatbotWidth.toString());
   }, [chatbotWidth]);
 
-  // Handle resize mouse events
+  useEffect(() => {
+    localStorage.setItem('chatbotVisible', isChatbotVisible.toString());
+  }, [isChatbotVisible]);
+
+  // Collapse/expand handlers
+  const handleCollapseAnalysis = () => {
+    setIsAnalysisCollapsed(true);
+    setIsChatbotCollapsed(false);
+    setChatbotWidth(95); // Chatbot takes 95% when analysis is collapsed
+  };
+
+  const handleCollapseChatbot = () => {
+    setIsChatbotCollapsed(true);
+    setIsAnalysisCollapsed(false);
+    setChatbotWidth(5); // Chatbot takes 5% when collapsed
+  };
+
+  const handleExpandBoth = () => {
+    setIsAnalysisCollapsed(false);
+    setIsChatbotCollapsed(false);
+    setChatbotWidth(20); // Reset to default split (20% chatbot, 80% analysis)
+  };
+
+  // Handle resize mouse events for draggable separator
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isResizing || !resizeRef.current) return;
@@ -51,8 +80,8 @@ function App() {
       const containerRect = container.getBoundingClientRect();
       const newWidth = ((containerRect.width - (e.clientX - containerRect.left)) / containerRect.width) * 100;
 
-      // Constrain between 25% and 60% (left panel minimum 40%)
-      const constrainedWidth = Math.max(25, Math.min(60, newWidth));
+      // Allow full range: 5% to 95% (allows both sides to take almost full screen)
+      const constrainedWidth = Math.max(5, Math.min(95, newWidth));
       setChatbotWidth(constrainedWidth);
     };
 
@@ -150,24 +179,55 @@ function App() {
 
   return (
     <div className={`h-screen w-screen overflow-hidden ${bgClass} transition-colors duration-300`}>
-      {/* Professional Header */}
+      {/* Professional Header - Single Row Compact */}
       <header className={`${theme === 'dark' ? 'bg-gray-900/90 border-gray-700' : 'bg-white/90 border-gray-200'} backdrop-blur-lg shadow-lg border-b sticky top-0 z-50 transition-colors duration-300`}>
-        <div className="w-full px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-[#B56727] rounded-lg flex items-center justify-center shadow-md">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="w-full px-4 py-1.5">
+          <div className="flex items-center justify-between gap-3">
+            {/* Left: Logo + Title */}
+            <div className="flex items-center space-x-2 flex-shrink-0">
+              <div className="w-6 h-6 bg-[#B56727] rounded flex items-center justify-center shadow-sm">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
-              <div>
-                <h1 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
-                  OrbitMeetAI
-                </h1>
-                <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} font-medium`}>Enterprise Meeting Intelligence Platform</p>
-              </div>
+              <h1 className={`text-base font-bold ${theme === 'dark' ? 'text-white' : 'text-black'} whitespace-nowrap`}>
+                OrbitMeetAI
+              </h1>
             </div>
-            <div className="flex items-center space-x-4">
+            
+            {/* Center: Project and Meeting Selector - Compact */}
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <ProjectSelector
+                onSelect={(projectName, meetingName, projectKey) => handleSelect(projectName, meetingName, projectKey)}
+                selectedProject={selectedProject}
+                selectedMeeting={selectedMeeting}
+              />
+            </div>
+            
+            {/* Right: Theme Toggle */}
+            <div className="flex items-center space-x-2 flex-shrink-0">
+              {/* Chatbot Toggle Button */}
+              <button
+                onClick={() => setIsChatbotVisible(!isChatbotVisible)}
+                className={`px-2 py-1 rounded transition-all flex items-center gap-1.5 ${
+                  theme === 'dark'
+                    ? isChatbotVisible
+                      ? 'bg-[#B56727] text-white hover:bg-[#d17a3a]'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : isChatbotVisible
+                    ? 'bg-[#B56727] text-white hover:bg-[#d17a3a]'
+                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                }`}
+                title={isChatbotVisible ? 'Hide Chatbot' : 'Show Chatbot'}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {isChatbotVisible ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  )}
+                </svg>
+              </button>
               <ConnectionStatus />
               <ThemeToggle />
             </div>
@@ -176,7 +236,7 @@ function App() {
       </header>
 
       {/* Full Screen Main Content */}
-      <main className="h-[calc(100vh-80px)] w-full flex flex-col overflow-hidden">
+      <main className="h-[calc(100vh-40px)] w-full flex flex-col overflow-hidden">
         {/* Error Message */}
         {error && (
           <div className="mx-6 mt-4 mb-2 flex-shrink-0">
@@ -215,22 +275,16 @@ function App() {
             <div className="flex-1 flex flex-col lg:flex-row min-h-0 gap-6" ref={resizeRef}>
               {/* Left Side - Analysis with Project Selector */}
               <div 
-                className="flex flex-col min-h-0 flex-shrink w-full lg:w-auto"
+                className={`flex flex-col min-h-0 flex-shrink w-full lg:w-auto transition-all duration-300 ${
+                  isAnalysisCollapsed ? 'lg:w-[5%]' : ''
+                }`}
                 style={{ 
-                  width: isDesktop ? `${100 - chatbotWidth}%` : '100%',
-                  minWidth: isDesktop ? '40%' : '100%'
+                  width: isDesktop && isChatbotVisible && !isAnalysisCollapsed ? `${100 - chatbotWidth}%` : 
+                         isDesktop && isChatbotVisible && isAnalysisCollapsed ? '5%' : '100%',
+                  minWidth: isDesktop && isChatbotVisible ? '5%' : '100%'
                 }}
               >
                 <div className={`${theme === 'dark' ? 'bg-gray-800/90 border-gray-700' : 'bg-white/90 border-gray-200'} backdrop-blur-sm rounded-xl shadow-xl border p-6 h-full flex flex-col overflow-hidden transition-colors duration-300`}>
-                  {/* Project Selector - Inside Left Panel */}
-                  <div className="mb-6 flex-shrink-0">
-                    <ProjectSelector
-                      onSelect={(projectName, meetingName, projectKey) => handleSelect(projectName, meetingName, projectKey)}
-                      selectedProject={selectedProject}
-                      selectedMeeting={selectedMeeting}
-                    />
-                  </div>
-
                   {!selectedMeeting ? (
                     /* No Meeting Selected - Show Message */
                     <div className="flex-1 flex items-center justify-center">
@@ -252,43 +306,23 @@ function App() {
                     /* Meeting Selected - Show Analysis */
                     <>
                       <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                        <div className="flex-1">
-                          <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-black'} flex items-center mb-2`}>
-                            <svg className="w-6 h-6 mr-2 text-[#B56727]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          <h2 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-black'} flex items-center whitespace-nowrap`}>
+                            <svg className="w-5 h-5 mr-2 text-[#B56727]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                             </svg>
                             Meeting Analysis
                           </h2>
-                          <p className={`text-base ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'} mb-2 font-medium`}>
-                            {selectedProject} • {selectedMeeting}
-                          </p>
-                          {/* Meeting Date and Time */}
-                          {meetingDateTime && (
-                            <div className={`flex items-center gap-2 mb-3 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                              <svg className="w-5 h-5 text-[#B56727]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                              <span className="text-sm font-semibold">
-                                {new Date(meetingDateTime).toLocaleString('en-US', {
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
-                            </div>
-                          )}
                           {participants.length > 0 && (
-                            <div className="flex items-center flex-wrap gap-2 mt-2">
-                              <span className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Participants:</span>
+                            <div className="flex items-center flex-wrap gap-2 flex-1 min-w-0">
+                              <span className={`text-xs font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} whitespace-nowrap`}>Participants:</span>
                               {participants.map((participant, idx) => (
                                 <span
                                   key={idx}
-                                  className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
+                                  className={`px-2 py-1 rounded-full text-xs font-semibold ${
                                     theme === 'dark' 
-                                      ? 'bg-[#B56727]/30 text-white border-2 border-[#B56727]' 
-                                      : 'bg-[#B56727]/10 text-[#B56727] border-2 border-[#B56727]'
+                                      ? 'bg-[#B56727]/30 text-white border border-[#B56727]' 
+                                      : 'bg-[#B56727]/10 text-[#B56727] border border-[#B56727]'
                                   }`}
                                 >
                                   {participant}
@@ -296,7 +330,74 @@ function App() {
                               ))}
                             </div>
                           )}
+                          {/* Collapse/Expand Buttons */}
+                          {isDesktop && isChatbotVisible && (
+                            <div className="flex items-center gap-2 ml-auto">
+                              {!isAnalysisCollapsed && !isChatbotCollapsed && (
+                                <>
+                                  <button
+                                    onClick={handleCollapseAnalysis}
+                                    className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
+                                      theme === 'dark'
+                                        ? 'bg-gray-700 text-white hover:bg-gray-600'
+                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                    title="Collapse Analysis"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={handleCollapseChatbot}
+                                    className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
+                                      theme === 'dark'
+                                        ? 'bg-gray-700 text-white hover:bg-gray-600'
+                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                    title="Collapse Chatbot"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                  </button>
+                                </>
+                              )}
+                              {(isAnalysisCollapsed || isChatbotCollapsed) && (
+                                <button
+                                  onClick={handleExpandBoth}
+                                  className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
+                                    theme === 'dark'
+                                      ? 'bg-[#B56727] text-white hover:bg-[#d17a3a]'
+                                      : 'bg-[#B56727] text-white hover:bg-[#d17a3a]'
+                                  }`}
+                                  title="Expand Both"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
+                        {/* Meeting Date and Time - Right side */}
+                        {meetingDateTime && (
+                          <div className={`flex items-center gap-2 flex-shrink-0 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                            <svg className="w-4 h-4 text-[#B56727]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-xs font-semibold whitespace-nowrap">
+                              {new Date(meetingDateTime).toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar min-h-0">
                         {loading ? (
@@ -326,38 +427,45 @@ function App() {
                 </div>
               </div>
 
-              {/* Resizer Handle */}
-              <div
-                className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setIsResizing(true);
-                }}
-                style={{
-                  backgroundColor: isResizing 
-                    ? '#B56727' 
-                    : theme === 'dark' 
-                      ? 'rgba(75, 85, 99, 0.5)' 
-                      : 'rgba(209, 213, 219, 0.5)'
-                }}
-              >
-                <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-1 bg-[#B56727] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute inset-y-0 -left-2 -right-2 z-10"></div>
-              </div>
+              {/* Draggable Separator Line */}
+              {isChatbotVisible && !isAnalysisCollapsed && !isChatbotCollapsed && (
+                <div
+                  className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setIsResizing(true);
+                  }}
+                  style={{
+                    backgroundColor: isResizing 
+                      ? '#B56727' 
+                      : theme === 'dark' 
+                        ? 'rgba(75, 85, 99, 0.5)' 
+                        : 'rgba(209, 213, 219, 0.5)'
+                  }}
+                >
+                  <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-1 bg-[#B56727] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="absolute inset-y-0 -left-2 -right-2 z-10"></div>
+                </div>
+              )}
 
-              {/* Right Side - Chat - Resizable Width */}
-              <div 
-                className="flex flex-col h-full min-h-0 flex-shrink-0 w-full lg:w-auto"
-                style={{ 
-                  width: isDesktop ? `${chatbotWidth}%` : '100%',
-                  minWidth: isDesktop ? '25%' : '100%'
-                }}
-              >
-                <Chatbot
-                  projectName={selectedProject}
-                  meetingName={selectedMeeting}
-                />
-              </div>
+              {/* Right Side - Chat - Collapsible Width - Only show when visible */}
+              {isChatbotVisible && (
+                <div 
+                  className={`flex flex-col h-full min-h-0 flex-shrink-0 w-full lg:w-auto transition-all duration-300 ${
+                    isChatbotCollapsed ? 'lg:w-[5%]' : ''
+                  }`}
+                  style={{ 
+                    width: isDesktop && !isChatbotCollapsed ? `${chatbotWidth}%` : 
+                           isDesktop && isChatbotCollapsed ? '5%' : '100%',
+                    minWidth: isDesktop ? '5%' : '100%'
+                  }}
+                >
+                  <Chatbot
+                    projectName={selectedProject}
+                    meetingName={selectedMeeting}
+                  />
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -366,18 +474,15 @@ function App() {
             <div className="flex-1 flex flex-col lg:flex-row min-h-0 gap-6" ref={resizeRef}>
               {/* Left Side - Empty State with Project Selector */}
               <div 
-                className="flex flex-col min-h-0 w-full lg:w-auto flex-shrink"
-                style={{ width: isDesktop ? `${100 - chatbotWidth}%` : '100%' }}
+                className={`flex flex-col min-h-0 w-full lg:w-auto flex-shrink transition-all duration-300 ${
+                  isAnalysisCollapsed ? 'lg:w-[5%]' : ''
+                }`}
+                style={{ 
+                  width: isDesktop && isChatbotVisible && !isAnalysisCollapsed ? `${100 - chatbotWidth}%` : 
+                         isDesktop && isChatbotVisible && isAnalysisCollapsed ? '5%' : '100%'
+                }}
               >
                 <div className={`${theme === 'dark' ? 'bg-gray-800/90 border-gray-700' : 'bg-white/90 border-gray-200'} backdrop-blur-sm rounded-xl shadow-xl border p-6 h-full flex flex-col transition-colors duration-300`}>
-                  {/* Project Selector - Inside Left Panel */}
-                  <div className="mb-6 flex-shrink-0">
-                    <ProjectSelector
-                      onSelect={(projectName, meetingName, projectKey) => handleSelect(projectName, meetingName, projectKey)}
-                      selectedProject={selectedProject}
-                      selectedMeeting={selectedMeeting}
-                    />
-                  </div>
                   <div className="flex-1 flex items-center justify-center">
                     <div className="text-center max-w-xl">
                       <div className={`w-24 h-24 mx-auto mb-6 ${theme === 'dark' ? 'bg-[#B56727]/30' : 'bg-[#B56727]/10'} rounded-2xl flex items-center justify-center`}>
@@ -402,38 +507,45 @@ function App() {
                 </div>
               </div>
 
-              {/* Resizer Handle */}
-              <div
-                className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setIsResizing(true);
-                }}
-                style={{
-                  backgroundColor: isResizing 
-                    ? '#B56727' 
-                    : theme === 'dark' 
-                      ? 'rgba(75, 85, 99, 0.5)' 
-                      : 'rgba(209, 213, 219, 0.5)'
-                }}
-              >
-                <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-1 bg-[#B56727] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute inset-y-0 -left-2 -right-2 z-10"></div>
-              </div>
+              {/* Draggable Separator Line */}
+              {isChatbotVisible && !isAnalysisCollapsed && !isChatbotCollapsed && (
+                <div
+                  className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize group hover:w-2 transition-all relative"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setIsResizing(true);
+                  }}
+                  style={{
+                    backgroundColor: isResizing 
+                      ? '#B56727' 
+                      : theme === 'dark' 
+                        ? 'rgba(75, 85, 99, 0.5)' 
+                        : 'rgba(209, 213, 219, 0.5)'
+                  }}
+                >
+                  <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-1 bg-[#B56727] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="absolute inset-y-0 -left-2 -right-2 z-10"></div>
+                </div>
+              )}
 
-              {/* Right Side - Chat - Resizable Width */}
-              <div 
-                className="flex flex-col h-full min-h-0 w-full lg:w-auto flex-shrink-0"
-                style={{ 
-                  width: isDesktop ? `${chatbotWidth}%` : '100%',
-                  minWidth: isDesktop ? '25%' : '100%'
-                }}
-              >
-                <Chatbot
-                  projectName={selectedProject}
-                  meetingName={selectedMeeting}
-                />
-              </div>
+              {/* Right Side - Chat - Collapsible Width - Only show when visible */}
+              {isChatbotVisible && (
+                <div 
+                  className={`flex flex-col h-full min-h-0 w-full lg:w-auto flex-shrink-0 transition-all duration-300 ${
+                    isChatbotCollapsed ? 'lg:w-[5%]' : ''
+                  }`}
+                  style={{ 
+                    width: isDesktop && !isChatbotCollapsed ? `${chatbotWidth}%` : 
+                           isDesktop && isChatbotCollapsed ? '5%' : '100%',
+                    minWidth: isDesktop ? '5%' : '100%'
+                  }}
+                >
+                  <Chatbot
+                    projectName={selectedProject}
+                    meetingName={selectedMeeting}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}

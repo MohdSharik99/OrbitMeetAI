@@ -1,2 +1,0 @@
-# Chatbot package for OrbitMeetAI
-

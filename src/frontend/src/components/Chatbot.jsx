@@ -158,7 +158,7 @@ const Chatbot = ({ projectName, meetingName }) => {
                   <span className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>OrbitMeetAI</span>
                 </div>
               )}
-              <div className={`text-base leading-relaxed ${theme === 'dark' && message.role === 'assistant' ? 'text-white' : message.role === 'user' ? 'text-white' : 'text-black'}`}>
+              <div className={`text-sm leading-relaxed ${theme === 'dark' && message.role === 'assistant' ? 'text-white' : message.role === 'user' ? 'text-white' : 'text-black'}`}>
                 {message.role === 'assistant' ? (
                   <div className="prose prose-sm max-w-none">
                     <ReactMarkdown
@@ -259,7 +259,7 @@ const Chatbot = ({ projectName, meetingName }) => {
               onChange={(e) => setInput(e.target.value)}
               placeholder={projectName ? "Ask a question about the meeting..." : "Select project and meeting first"}
               disabled={!projectName || loading}
-              className={`w-full px-4 py-3 pr-12 border-2 rounded-xl focus:ring-2 focus:ring-[#B56727] focus:border-[#B56727] disabled:cursor-not-allowed transition-all shadow-sm ${
+              className={`w-full px-4 py-3 pr-12 border-2 rounded-xl focus:ring-2 focus:ring-[#B56727] focus:border-[#B56727] disabled:cursor-not-allowed transition-all shadow-sm text-lg ${
                 theme === 'dark' 
                   ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 disabled:bg-gray-800' 
                   : 'bg-white border-gray-200 text-black placeholder-gray-400 disabled:bg-gray-100'
